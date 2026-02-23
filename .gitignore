@@ -1,6 +1,10 @@
 # Zensical build output
 /site
 
+# Conversion build artifacts
+/build
+/dist
+
 # Python virtual environments
 .venv
 env/

@@ -1,0 +1,59 @@
+name: Check for New EnergyPlus Release
+
+on:
+  schedule:
+    # Run every Monday at 08:00 UTC
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Check for new release
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Fetch the latest release tag from NatLabRockies/EnergyPlus
+          LATEST_TAG=$(gh api repos/NatLabRockies/EnergyPlus/releases/latest --jq '.tag_name')
+          echo "Latest EnergyPlus release: ${LATEST_TAG}"
+
+          # Check if this version is already in our versions.json (if it exists on gh-pages)
+          KNOWN_VERSIONS=""
+          if gh api repos/${{ github.repository }}/contents/versions.json --jq '.content' 2>/dev/null | base64 -d > /tmp/versions.json 2>/dev/null; then
+            KNOWN_VERSIONS=$(cat /tmp/versions.json | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          for entry in data:
+              print(entry['title'])
+          ")
+          fi
+
+          # Strip the 'v' prefix for comparison
+          LATEST_TITLE="${LATEST_TAG#v}"
+
+          if echo "$KNOWN_VERSIONS" | grep -q "^${LATEST_TITLE}$"; then
+            echo "Version ${LATEST_TAG} already deployed"
+            echo "new_version=" >> "$GITHUB_OUTPUT"
+          else
+            echo "New version found: ${LATEST_TAG}"
+            echo "new_version=${LATEST_TAG}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Trigger conversion workflow
+        if: steps.check.outputs.new_version != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Triggering conversion for ${{ steps.check.outputs.new_version }}"
+          gh workflow run convert-docs.yml \
+            -f versions="${{ steps.check.outputs.new_version }}" \
+            -f force_rebuild=true

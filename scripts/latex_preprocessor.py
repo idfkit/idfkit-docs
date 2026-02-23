@@ -1,0 +1,192 @@
+"""Pre-Pandoc LaTeX transformations for EnergyPlus documentation.
+
+Handles custom macros and environments that Pandoc cannot process directly:
+- siunitx \\SI{}, \\si{}, \\IP{}, \\ip{} macros and custom unit declarations
+- Bracket macros: \\PB{}, \\RB{}, \\CB{}
+- callout environment -> quote (Pandoc-friendly)
+- \\warning{} -> bold warning markers
+- Strip \\input{} directives (leaf files are converted independently)
+"""
+
+from __future__ import annotations
+
+import re
+
+# --- siunitx unit macros ---
+# Custom units declared in header.tex via \DeclareSIUnit
+
+SI_UNITS: dict[str, str] = {
+    # SI custom units
+    r"\area": "m²",
+    r"\volume": "m³",
+    r"\volumeFlowRate": "m³/s",
+    r"\massFlowRate": "kg/s",
+    r"\density": "kg/m³",
+    r"\humidityRatio": "kg_W/kg_DA",
+    r"\specificHeatCapacity": "J/(kg·K)",
+    r"\specificEnthalpy": "J/kg",
+    r"\coefficientOfPerformance": "W/W",
+    r"\wattperVolumeFlowRate": "W·s/m³",
+    r"\volumeFlowRateperArea": "(m³/s)/m²",
+    r"\volumeFlowRateperWatt": "m³/(s·W)",
+    r"\umolperAreaperSecond": "μmol/(m²·s)",
+    r"\evapotranspirationRate": "kg/(m²·s)",
+    # IP custom units
+    r"\fahrenheit": "°F",
+    r"\ft": "ft",
+    r"\sqft": "ft²",
+    r"\cfm": "ft³/min",
+    r"\CFM": "CFM",
+    r"\gal": "gal",
+    r"\gpm": "gpm",
+    r"\MBH": "MBH",
+    # Standard siunitx units (common ones used in EnergyPlus docs)
+    r"\watt": "W",
+    r"\kilowatt": "kW",
+    r"\megawatt": "MW",
+    r"\joule": "J",
+    r"\kilojoule": "kJ",
+    r"\megajoule": "MJ",
+    r"\kelvin": "K",
+    r"\celsius": "°C",
+    r"\meter": "m",
+    r"\kilogram": "kg",
+    r"\gram": "g",
+    r"\second": "s",
+    r"\minute": "min",
+    r"\hour": "h",
+    r"\ampere": "A",
+    r"\volt": "V",
+    r"\pascal": "Pa",
+    r"\kilopascal": "kPa",
+    r"\percent": "%",
+    r"\liter": "L",
+    r"\milli": "m",
+    r"\kilo": "k",
+    r"\mega": "M",
+    r"\micro": "μ",
+    r"\per": "/",
+    r"\square": "²",
+    r"\cubic": "³",
+    r"\of": "·",
+}
+
+# siunitx prefix pattern for \SI{value}{unit} and \si{unit}
+_BRACE_RE = r"\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}"
+
+
+def _expand_unit(unit_str: str) -> str:
+    """Expand a siunitx unit specification to plain text."""
+    result = unit_str
+    # Sort by length (longest first) to avoid partial matches
+    for macro, text in sorted(SI_UNITS.items(), key=lambda x: -len(x[0])):
+        result = result.replace(macro, text)
+    # Clean up remaining LaTeX artifacts
+    result = result.replace("\\", "")
+    result = result.replace("{", "")
+    result = result.replace("}", "")
+    return result.strip()
+
+
+def expand_si_macros(text: str) -> str:
+    r"""Expand \SI{value}{unit}, \si{unit}, \IP{value}{unit}, \ip{unit} macros."""
+
+    # \SI{value}{unit} and \IP{value}{unit} -> "value unit"
+    def replace_si_val_unit(m: re.Match) -> str:
+        value = m.group(1)
+        unit = _expand_unit(m.group(2))
+        return f"{value} {unit}"
+
+    text = re.sub(r"\\SI" + _BRACE_RE + _BRACE_RE, replace_si_val_unit, text)
+    text = re.sub(r"\\IP" + _BRACE_RE + _BRACE_RE, replace_si_val_unit, text)
+
+    # \si{unit} and \ip{unit} -> "unit"
+    def replace_si_unit(m: re.Match) -> str:
+        return _expand_unit(m.group(1))
+
+    text = re.sub(r"\\si" + _BRACE_RE, replace_si_unit, text)
+    text = re.sub(r"\\ip" + _BRACE_RE, replace_si_unit, text)
+
+    return text
+
+
+def expand_bracket_macros(text: str) -> str:
+    r"""Expand \PB{}, \RB{}, \CB{} bracket macros to standard LaTeX."""
+    text = re.sub(r"\\PB" + _BRACE_RE, r"\\left( \1 \\right)", text)
+    text = re.sub(r"\\RB" + _BRACE_RE, r"\\left[ \1 \\right]", text)
+    text = re.sub(r"\\CB" + _BRACE_RE, r"\\left\\{ \1 \\right\\}", text)
+    return text
+
+
+def convert_callout_env(text: str) -> str:
+    r"""Convert \begin{callout}...\end{callout} to \begin{quote}...\end{quote}."""
+    text = text.replace(r"\begin{callout}", r"\begin{quote}")
+    text = text.replace(r"\end{callout}", r"\end{quote}")
+    return text
+
+
+def convert_warning_macro(text: str) -> str:
+    r"""Convert \warning{text} to bold warning markers."""
+    return re.sub(r"\\warning" + _BRACE_RE, r"**Warning:** \1", text)
+
+
+def strip_input_directives(text: str) -> str:
+    r"""Strip \input{} directives since leaf files are converted independently."""
+    return re.sub(r"\\input\{[^}]*\}", "", text)
+
+
+def convert_wherelist_env(text: str) -> str:
+    r"""Convert \begin{wherelist}...\end{wherelist} to a definition-list-friendly format.
+
+    The wherelist environment renders as "where:" followed by "symbol = description" items.
+    We convert it to a Pandoc-friendly itemize with bold symbols.
+    """
+
+    def replace_wherelist(m: re.Match) -> str:
+        body = m.group(1)
+        # Each item is typically: \item[symbol] description
+        items = re.findall(r"\\item\[([^\]]*)\]\s*(.*?)(?=\\item|\Z)", body, re.DOTALL)
+        if not items:
+            return body
+        lines = ["*where:*\n"]
+        for symbol, desc in items:
+            desc = desc.strip()
+            lines.append(f"- **{symbol}** = {desc}")
+        return "\n".join(lines) + "\n"
+
+    return re.sub(
+        r"\\begin\{wherelist\}(.*?)\\end\{wherelist\}",
+        replace_wherelist,
+        text,
+        flags=re.DOTALL,
+    )
+
+
+def strip_document_wrapper(text: str) -> str:
+    r"""Strip \begin{document}...\end{document} and preamble for leaf files."""
+    marker = r"\begin{document}"
+    idx = text.find(marker)
+    if idx != -1:
+        text = text[idx + len(marker) :]
+    text = text.replace(r"\end{document}", "")
+    return text
+
+
+def clean_label_commands(text: str) -> str:
+    r"""Preserve \label{} commands but mark them for the Lua filter to handle."""
+    # Labels inside equations are handled later by the postprocessor
+    # For section-level labels, keep them as-is for Pandoc
+    return text
+
+
+def preprocess(text: str) -> str:
+    """Apply all preprocessing transformations in the correct order."""
+    text = strip_document_wrapper(text)
+    text = strip_input_directives(text)
+    text = expand_si_macros(text)
+    text = expand_bracket_macros(text)
+    text = convert_callout_env(text)
+    text = convert_warning_macro(text)
+    text = convert_wherelist_env(text)
+    text = clean_label_commands(text)
+    return text

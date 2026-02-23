@@ -1,0 +1,162 @@
+name: Convert EnergyPlus Docs
+
+on:
+  workflow_dispatch:
+    inputs:
+      versions:
+        description: 'Comma-separated version tags to convert (e.g., "v25.2.0,v25.1.0") or "all"'
+        required: true
+        default: "all"
+      force_rebuild:
+        description: "Force rebuild even if cached"
+        required: false
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      versions:
+        description: 'Comma-separated version tags to convert or "all"'
+        required: true
+        type: string
+      force_rebuild:
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pages: write
+
+jobs:
+  # Generate the matrix of versions to build
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      all_versions: ${{ steps.set-matrix.outputs.all_versions }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up the environment
+        uses: ./.github/actions/setup-python-env
+
+      - name: Determine versions to build
+        id: set-matrix
+        run: |
+          if [ "${{ inputs.versions }}" = "all" ]; then
+            VERSIONS=$(python -c "from scripts.config import TARGET_VERSIONS; print(','.join(TARGET_VERSIONS))")
+          else
+            VERSIONS="${{ inputs.versions }}"
+          fi
+
+          # Convert comma-separated to JSON array
+          JSON_ARRAY=$(echo "$VERSIONS" | tr ',' '\n' | jq -R . | jq -s 'map(select(length > 0))')
+          echo "matrix={\"version\":${JSON_ARRAY}}" >> "$GITHUB_OUTPUT"
+          echo "all_versions=${VERSIONS}" >> "$GITHUB_OUTPUT"
+
+  # Build each version as a parallel matrix job
+  convert:
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
+      max-parallel: 4
+      fail-fast: false
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up the environment
+        uses: ./.github/actions/setup-python-env
+
+      - name: Install Pandoc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pandoc
+
+      - name: Compute cache key
+        id: cache-key
+        run: |
+          SCRIPTS_HASH=$(find scripts/ -type f -name '*.py' -o -name '*.lua' | sort | xargs sha256sum | sha256sum | cut -d' ' -f1)
+          echo "key=docs-${{ matrix.version }}-${SCRIPTS_HASH}" >> "$GITHUB_OUTPUT"
+
+      - name: Cache built version
+        id: cache
+        if: ${{ !inputs.force_rebuild }}
+        uses: actions/cache@v4
+        with:
+          path: build/${{ matrix.version_short }}
+          key: ${{ steps.cache-key.outputs.key }}
+
+      - name: Compute short version
+        id: short
+        run: |
+          SHORT=$(python -c "from scripts.config import version_to_short; print(version_to_short('${{ matrix.version }}'))")
+          echo "version_short=${SHORT}" >> "$GITHUB_OUTPUT"
+
+      - name: Clone EnergyPlus source
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth=1 --branch ${{ matrix.version }} --single-branch \
+            https://github.com/NatLabRockies/EnergyPlus.git \
+            build/sources/${{ matrix.version }}
+
+      - name: Convert docs
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          python -m scripts.convert \
+            --source build/sources/${{ matrix.version }} \
+            --output build/${{ steps.short.outputs.version_short }} \
+            --version ${{ matrix.version }} \
+            --verbose
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-${{ steps.short.outputs.version_short }}
+          path: build/${{ steps.short.outputs.version_short }}/site/
+          retention-days: 1
+
+  # Merge all version outputs and deploy
+  deploy:
+    needs: [prepare, convert]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up the environment
+        uses: ./.github/actions/setup-python-env
+
+      - name: Download all version artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist-artifacts/
+
+      - name: Merge version outputs
+        run: |
+          mkdir -p dist
+
+          # Move each version artifact to its versioned directory
+          for dir in dist-artifacts/docs-*/; do
+            version_short=$(basename "$dir" | sed 's/^docs-//')
+            mv "$dir" "dist/${version_short}"
+          done
+
+          # Generate versions.json and landing page
+          VERSIONS="${{ needs.prepare.outputs.all_versions }}"
+          python -c "
+          from scripts.version_manager import generate_versions_json, generate_root_landing
+          from pathlib import Path
+          versions = '${VERSIONS}'.split(',')
+          generate_versions_json(versions, Path('dist'))
+          generate_root_landing(Path('dist'), versions)
+          "
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          force_orphan: true

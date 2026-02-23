@@ -16,6 +16,7 @@ dev = [
     "zensical>=0.0.23",
     "pre-commit>=2.20.0",
     "ruff>=0.11.5",
+    "pypandoc>=1.14",
 ]
 
 [tool.ruff]
@@ -61,6 +62,10 @@ ignore = [
     "E501",
     # DoNotAssignLambda
     "E731",
+    # subprocess with partial executable path (intentional CLI tool calls)
+    "S607",
+    # subprocess call check (intentional CLI tool calls)
+    "S603",
 ]
 
 [tool.ruff.format]
