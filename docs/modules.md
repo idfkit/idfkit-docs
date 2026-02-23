@@ -1,1 +1,0 @@
-::: idfkit_docs.foo

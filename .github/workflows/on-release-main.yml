@@ -4,14 +4,11 @@ on:
   release:
     types: [published]
 
-
 permissions:
   contents: write
-
+  pages: write
 
 jobs:
-
-
   deploy-docs:
     runs-on: ubuntu-latest
     steps:
@@ -21,5 +18,11 @@ jobs:
       - name: Set up the environment
         uses: ./.github/actions/setup-python-env
 
-      - name: Deploy documentation
-        run: uv run mkdocs gh-deploy --force
+      - name: Build documentation
+        run: uv run zensical build
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./site

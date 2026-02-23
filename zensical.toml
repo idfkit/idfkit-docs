@@ -1,0 +1,9 @@
+[project]
+site_name = "idfkit-docs"
+site_url = "https://docs.idfkit.com"
+site_description = "EnergyPlus documentation built with Zensical"
+site_author = "Samuel Letellier-Duchesne"
+copyright = "Maintained by <a href='https://samuelduchesne.com'>samuelduchesne</a>."
+
+[project.theme]
+variant = "modern"

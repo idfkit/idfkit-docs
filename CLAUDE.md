@@ -2,31 +2,32 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Project Overview
+
+This is a documentation-only project for EnergyPlus, built with [Zensical](https://zensical.org/).
+
 ## Common Commands
 
 ```bash
 # Install dependencies
 uv sync
 
-# Run all quality checks (lint, format, type check, deptry)
+# Run all quality checks (pre-commit hooks)
 make check
-
-# Run tests
-make test
-
-# Run a single test
-uv run pytest tests/test_file.py::test_function -v
 
 # Serve documentation locally
 make docs
+
+# Test documentation build
+make docs-test
 ```
 
 ## Before Committing
 
-Always run the full quality gate before proposing changes:
+Always run the quality gate before proposing changes:
 
 ```bash
-make check && make test
+make check
 ```
 
-This runs: lock file validation, pre-commit hooks (ruff format/lint), pyright, deptry, and pytest.
+This runs: lock file validation and pre-commit hooks (file format checks).
