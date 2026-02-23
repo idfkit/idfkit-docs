@@ -19,8 +19,8 @@ check: ## Run code quality tools.
 docs-test: ## Test if documentation can be built without errors
 	@uv run zensical build
 
-.PHONY: docs
-docs: ## Serve a single version locally (usage: make docs [VERSION=v25.2.0])
+.PHONY: dev
+dev: ## Hot-reload dev server for a single version (usage: make dev [VERSION=v25.2.0])
 	@if [ -z "$(VERSION)" ]; then \
 		SHORT=$$(ls -d build/v*/ 2>/dev/null | head -1 | xargs basename); \
 		if [ -z "$$SHORT" ]; then echo "No built versions found. Run 'make convert VERSION=v25.2.0' first."; exit 1; fi; \
@@ -34,9 +34,9 @@ docs: ## Serve a single version locally (usage: make docs [VERSION=v25.2.0])
 	fi
 
 .PHONY: serve
-serve: ## Serve the full multi-version site from dist/ (run convert-all first)
+serve: ## Serve the full multi-version site from dist/
 	@if [ ! -d dist ] || [ ! -f dist/index.html ]; then \
-		echo "No dist/ found. Run 'make convert-all' first."; exit 1; \
+		echo "No dist/ found. Run 'make convert VERSION=v25.2.0' first."; exit 1; \
 	fi
 	@echo "Serving full site from dist/ on http://localhost:8000"
 	@python -m http.server 8000 --directory dist
@@ -58,6 +58,16 @@ convert: ## Convert a single EnergyPlus version (usage: make convert VERSION=v25
 		--source build/sources/$(VERSION) \
 		--output build/$$(uv run python -c "from scripts.config import version_to_short; print(version_to_short('$(VERSION)'))") \
 		--version $(VERSION) --verbose
+	@$(MAKE) deploy VERSION=$(VERSION)
+
+.PHONY: deploy
+deploy: ## Deploy a built version to dist/ (usage: make deploy VERSION=v25.2.0)
+	@if [ -z "$(VERSION)" ]; then echo "Usage: make deploy VERSION=v25.2.0"; exit 1; fi
+	@SHORT=$$(uv run python -c "from scripts.config import version_to_short; print(version_to_short('$(VERSION)'))"); \
+	if [ ! -d "build/$$SHORT" ]; then echo "Version $(VERSION) not built. Run 'make convert VERSION=$(VERSION)' first."; exit 1; fi; \
+	echo "Deploying $$SHORT to dist/..."; \
+	uv run python -c "from pathlib import Path; from scripts.version_manager import deploy_single_version; deploy_single_version('$(VERSION)', Path('build/$$SHORT'), Path('dist'))"
+	@echo "✅ Deployed to dist/. Run 'make serve' to view."
 
 .PHONY: convert-all
 convert-all: ## Convert all target EnergyPlus versions in parallel

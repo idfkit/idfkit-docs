@@ -8,6 +8,8 @@ Generates:
 from __future__ import annotations
 
 import json
+import re
+import shutil
 from dataclasses import asdict
 from pathlib import Path
 
@@ -208,6 +210,46 @@ footer a:hover{{text-decoration:underline}}
     return output_path
 
 
+def _version_sort_key(v: str) -> tuple[int, ...]:
+    """Parse a version tag into a sortable tuple of ints."""
+    return tuple(int(x) for x in v.lstrip("v").split("."))
+
+
+def _discover_versions(deploy_dir: Path) -> list[str]:
+    """Scan deploy_dir for v* directories and return full version tags, newest first."""
+    versions: list[str] = []
+    for d in deploy_dir.iterdir():
+        if d.is_dir() and re.match(r"^v\d+\.\d+$", d.name):
+            # Convert short form (v25.2) back to full tag (v25.2.0)
+            versions.append(f"{d.name}.0")
+    return sorted(versions, key=_version_sort_key, reverse=True)
+
+
+def deploy_single_version(version: str, build_dir: Path, deploy_dir: Path) -> None:
+    """Copy one version's built site to the deployment directory and regenerate root files.
+
+    Args:
+        version: Full version tag (e.g., "v25.2.0")
+        build_dir: The version's build directory (containing a site/ subdirectory)
+        deploy_dir: Root deployment directory (e.g., dist/)
+    """
+    short = version_to_short(version)
+    site_dir = build_dir / "site"
+    if not site_dir.exists():
+        site_dir = build_dir
+
+    target = deploy_dir / short
+    if target.exists():
+        shutil.rmtree(target)
+    deploy_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(site_dir, target)
+
+    # Regenerate root files for all versions currently in dist/
+    versions = _discover_versions(deploy_dir)
+    generate_versions_json(versions, deploy_dir)
+    generate_root_landing(deploy_dir, versions)
+
+
 def merge_version_outputs(
     version_build_dirs: dict[str, Path],
     deploy_dir: Path,
@@ -219,8 +261,6 @@ def merge_version_outputs(
                             (each containing a site/ subdirectory from zensical build)
         deploy_dir: Final deployment directory
     """
-    import shutil
-
     deploy_dir.mkdir(parents=True, exist_ok=True)
 
     for version, build_dir in version_build_dirs.items():
@@ -228,7 +268,6 @@ def merge_version_outputs(
         site_dir = build_dir / "site"
 
         if not site_dir.exists():
-            # Try the build dir itself if site/ doesn't exist
             site_dir = build_dir
 
         target = deploy_dir / short
@@ -237,9 +276,6 @@ def merge_version_outputs(
         shutil.copytree(site_dir, target)
 
     # Generate versions.json and landing page (newest first)
-    def _version_key(v: str) -> tuple[int, ...]:
-        return tuple(int(x) for x in v.lstrip("v").split("."))
-
-    versions = sorted(version_build_dirs.keys(), key=_version_key, reverse=True)
+    versions = sorted(version_build_dirs.keys(), key=_version_sort_key, reverse=True)
     generate_versions_json(versions, deploy_dir)
     generate_root_landing(deploy_dir, versions)

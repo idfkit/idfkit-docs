@@ -15,8 +15,14 @@ uv sync
 # Run all quality checks (pre-commit hooks)
 make check
 
-# Serve documentation locally
-make docs
+# Convert a single version (builds AND deploys to dist/)
+make convert VERSION=v25.2.0
+
+# Serve the full multi-version site from dist/
+make serve
+
+# Hot-reload dev server (single version, for development)
+make dev VERSION=v25.2.0
 
 # Test documentation build
 make docs-test
