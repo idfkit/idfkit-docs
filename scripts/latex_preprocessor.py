@@ -129,8 +129,16 @@ def convert_callout_env(text: str) -> str:
 
 
 def convert_warning_macro(text: str) -> str:
-    r"""Convert \warning{text} to bold warning markers."""
-    return re.sub(r"\\warning" + _BRACE_RE, r"**Warning:** \1", text)
+    r"""Convert \warning{text} to a quote environment with bold warning prefix.
+
+    The Lua filter detects the \textbf{Warning:} prefix inside the resulting
+    blockquote and emits a ``!!! warning`` admonition instead of ``!!! note``.
+    """
+    return re.sub(
+        r"\\warning" + _BRACE_RE,
+        r"\\begin{quote}\n\\textbf{Warning:} \1\n\\end{quote}",
+        text,
+    )
 
 
 def strip_input_directives(text: str) -> str:

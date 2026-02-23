@@ -117,12 +117,23 @@ function CodeBlock(el)
     return el
 end
 
--- Convert BlockQuotes (originally callout environments) to admonition syntax.
+-- Convert BlockQuotes (originally callout/warning environments) to admonition syntax.
 -- Pandoc converts \begin{quote}...\end{quote} to BlockQuote elements.
--- We emit them as Zensical-compatible admonitions: !!! note
+-- We detect the content prefix to choose the admonition type:
+--   **Warning:** ... -> !!! warning
+--   (default)       -> !!! note
 function BlockQuote(el)
     -- Build the admonition as a raw markdown block
     local content = pandoc.write(pandoc.Pandoc(el.content), "markdown")
+
+    -- Detect admonition type from content prefix
+    local admonition_type = "note"
+
+    if content:match("^%*%*Warning:%*%*") then
+        admonition_type = "warning"
+        -- Strip the prefix; the admonition type already conveys it
+        content = content:gsub("^%*%*Warning:%*%*%s*", "")
+    end
 
     -- Indent all lines by 4 spaces for admonition body
     local indented = ""
@@ -134,7 +145,7 @@ function BlockQuote(el)
         end
     end
 
-    local result = '!!! note ""\n' .. indented
+    local result = '!!! ' .. admonition_type .. ' ""\n' .. indented
     return pandoc.RawBlock("markdown", result)
 end
 

@@ -355,6 +355,20 @@ def generate_zensical_config(
     for entry in nav_data:
         nav_lines.append(_nav_item_to_toml(entry, 1))
 
+    # Theme features
+    features = [
+        "navigation.tabs",
+        "navigation.instant",
+        "navigation.instant.prefetch",
+        "navigation.path",
+        "navigation.sections",
+        "navigation.indexes",
+        "navigation.top",
+        "navigation.tracking",
+        "content.code.copy",
+    ]
+    features_str = ", ".join(f'"{f}"' for f in features)
+
     # Generate TOML config
     config_lines = [
         "[project]",
@@ -367,7 +381,28 @@ def generate_zensical_config(
         "",
         "[project.theme]",
         'variant = "modern"',
-        'features = ["navigation.tabs"]',
+        f"features = [{features_str}]",
+        "",
+        "[project.theme.icon]",
+        'logo = "material/flash"',
+        "",
+        "[[project.theme.palette]]",
+        'scheme = "default"',
+        'primary = "teal"',
+        'accent = "amber"',
+        "",
+        "[project.theme.palette.toggle]",
+        'icon = "material/brightness-7"',
+        'name = "Switch to dark mode"',
+        "",
+        "[[project.theme.palette]]",
+        'scheme = "slate"',
+        'primary = "teal"',
+        'accent = "amber"',
+        "",
+        "[project.theme.palette.toggle]",
+        'icon = "material/brightness-4"',
+        'name = "Switch to light mode"',
         "",
         "[project.extra.version]",
         'provider = "mike"',

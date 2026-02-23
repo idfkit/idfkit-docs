@@ -1,6 +1,7 @@
 """Post-Pandoc Markdown cleanup for EnergyPlus documentation.
 
 Handles:
+- Ordered list detection (non-breaking space after number markers)
 - Admonition formatting for Zensical (4-space indent)
 - Image path rewriting relative to output file location
 - Cross-reference resolution via label index
@@ -14,6 +15,18 @@ from __future__ import annotations
 import re
 
 from scripts.models import LabelRef
+
+
+def fix_ordered_list_markers(text: str) -> str:
+    r"""Replace non-breaking spaces after ordered-list markers with regular spaces.
+
+    LaTeX ``~`` (non-breaking space) becomes U+00A0 in Pandoc's output.  When a
+    manually numbered line like ``1.~Variable`` passes through Pandoc, the
+    markdown output is ``1.\xa0Variable``.  Markdown parsers require a regular
+    ASCII space after the ``1.`` marker to recognise an ordered list, so the
+    non-breaking space must be replaced.
+    """
+    return re.sub(r"^(\d+\.)\xa0", r"\1 ", text, flags=re.MULTILINE)
 
 
 def add_front_matter(text: str, title: str) -> str:
@@ -174,6 +187,7 @@ def postprocess(
     if title is None:
         title = extract_title(text)
 
+    text = fix_ordered_list_markers(text)
     text = fix_admonition_indent(text)
     text = rewrite_image_paths(text, doc_set_slug, rel_depth=rel_depth)
     text = resolve_cross_references(text, label_index)
