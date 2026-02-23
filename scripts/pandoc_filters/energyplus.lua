@@ -15,6 +15,10 @@ function Table(el)
     local function cell_to_text(cell)
         local doc = pandoc.Pandoc(cell.contents)
         local text = pandoc.write(doc, "markdown")
+        -- Normalize non-breaking spaces to regular spaces (LaTeX ~ produces
+        -- bytes that become invalid UTF-8 when assembled into pipe tables)
+        text = text:gsub("\xc2\xa0", " ")  -- UTF-8 non-breaking space
+        text = text:gsub("\xa0", " ")       -- bare Latin-1 non-breaking space
         -- Trim trailing whitespace/newlines
         text = text:gsub("%s+$", "")
         -- Collapse newlines to spaces (pipe tables need single-line cells)

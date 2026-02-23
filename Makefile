@@ -62,7 +62,7 @@ convert: ## Convert a single EnergyPlus version (usage: make convert VERSION=v25
 .PHONY: convert-all
 convert-all: ## Convert all target EnergyPlus versions in parallel
 	@echo "Converting all EnergyPlus versions..."
-	@uv run python -m scripts.convert_all --verbose
+	@uv run python -m scripts.convert_all --verbose --force-rebuild
 
 .PHONY: build-version
 build-version: ## Convert and build a single version (usage: make build-version VERSION=v25.2.0)

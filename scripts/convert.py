@@ -134,7 +134,7 @@ def convert_tex_file(
         text = tex_path.read_text(errors="replace")
 
         # Preprocess
-        text = preprocess(text)
+        text = preprocess(text, source_hint=str(tex_path))
 
         # Write to a temp file for Pandoc
         temp_tex = output_path.with_suffix(".tex.tmp")
@@ -308,18 +308,24 @@ Welcome to the EnergyPlus {version_title} documentation.
     index_path.write_text(content)
 
 
+def _escape_toml_string(s: str) -> str:
+    """Escape a string for use inside TOML double-quoted strings."""
+    return s.replace("\\", "\\\\").replace('"', '\\"')
+
+
 def _nav_item_to_toml(item: dict | str, indent: int = 0) -> str:
     """Serialize a single nav item to TOML array-of-tables syntax."""
     prefix = "  " * indent
     if isinstance(item, str):
-        return f'{prefix}"{item}"'
+        return f'{prefix}"{_escape_toml_string(item)}"'
     # Dict with one key
     for title, value in item.items():
+        escaped_title = _escape_toml_string(title)
         if isinstance(value, str):
-            return f'{prefix}{{ "{title}" = "{value}" }}'
+            return f'{prefix}{{ "{escaped_title}" = "{_escape_toml_string(value)}" }}'
         if isinstance(value, list):
             children = ",\n".join(_nav_item_to_toml(child, indent + 1) for child in value)
-            return f'{prefix}{{ "{title}" = [\n{children},\n{prefix}] }}'
+            return f'{prefix}{{ "{escaped_title}" = [\n{children},\n{prefix}] }}'
     return ""
 
 

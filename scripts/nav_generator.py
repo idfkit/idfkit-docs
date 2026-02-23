@@ -56,12 +56,14 @@ def extract_heading(tex_path: Path) -> tuple[str, int]:
     ]
 
     for pattern, level in heading_patterns:
-        m = re.search(pattern, text)
+        m = re.search(pattern, text, re.DOTALL)
         if m:
             title = m.group(1).strip()
             # Clean LaTeX from title
             title = re.sub(r"\\[a-zA-Z]+\{([^}]*)\}", r"\1", title)
             title = re.sub(r"[\\{}]", "", title)
+            # Normalize whitespace (multi-line headings with \\ linebreaks)
+            title = re.sub(r"\s+", " ", title).strip()
             return (title, level)
 
     # Fallback: use filename

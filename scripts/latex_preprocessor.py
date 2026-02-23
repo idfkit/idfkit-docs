@@ -10,7 +10,10 @@ Handles custom macros and environments that Pandoc cannot process directly:
 
 from __future__ import annotations
 
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 # --- siunitx unit macros ---
 # Custom units declared in header.tex via \DeclareSIUnit
@@ -191,6 +194,19 @@ def strip_document_wrapper(text: str) -> str:
     return text
 
 
+def strip_tex_spacing_primitives(text: str) -> str:
+    r"""Strip TeX math spacing primitives unsupported by MathJax.
+
+    Commands like \medmuskip=0mu, \thinmuskip=0mu, \nulldelimiterspace=0pt
+    are used in the LaTeX source to compress wide equations for PDF output.
+    MathJax ignores or chokes on these, so we remove them.
+    """
+    text = re.sub(r"\\(?:med|thin|thick)muskip\s*=\s*\S+", "", text)
+    text = re.sub(r"\\nulldelimiterspace\s*=\s*\S+", "", text)
+    text = re.sub(r"\\scriptspace\s*=\s*\S+", "", text)
+    return text
+
+
 def clean_label_commands(text: str) -> str:
     r"""Preserve \label{} commands but mark them for the Lua filter to handle."""
     # Labels inside equations are handled later by the postprocessor
@@ -198,7 +214,85 @@ def clean_label_commands(text: str) -> str:
     return text
 
 
-def preprocess(text: str) -> str:
+_MAX_ORPHAN_BRACES = 3
+
+
+def _find_orphan_braces(text: str) -> tuple[list[int], list[int]]:
+    """Scan *text* and return (unmatched_open_positions, unmatched_close_positions).
+
+    Escaped braces (``\\{``, ``\\}``) and LaTeX comment lines are skipped.
+    """
+    open_stack: list[int] = []
+    orphan_close: list[int] = []
+
+    i = 0
+    n = len(text)
+    while i < n:
+        ch = text[i]
+
+        # Skip LaTeX comments (% to end of line)
+        if ch == "%" and (i == 0 or text[i - 1] != "\\"):
+            while i < n and text[i] != "\n":
+                i += 1
+            continue
+
+        # Skip escaped braces: \{ and \}
+        if ch == "\\" and i + 1 < n and text[i + 1] in "{}":
+            i += 2
+            continue
+
+        if ch == "{":
+            open_stack.append(i)
+        elif ch == "}":
+            if open_stack:
+                open_stack.pop()
+            else:
+                orphan_close.append(i)
+
+        i += 1
+
+    return open_stack, orphan_close
+
+
+def fix_unbalanced_braces(text: str, *, source_hint: str = "") -> str:
+    r"""Remove orphan braces that would cause Pandoc parse errors.
+
+    Some upstream EnergyPlus .tex files have brace typos (e.g. an extra ``{``
+    before a parenthesised unit, or a stray ``}`` at line end).  Pandoc aborts
+    on these with "unexpected end of input" or "unexpected Symbol }".
+
+    As a safeguard the function only acts when the total number of orphan braces
+    is at most ``_MAX_ORPHAN_BRACES``; larger imbalances likely indicate a bug
+    in an earlier preprocessing step, and are left untouched (with a warning).
+    """
+    open_stack, orphan_close = _find_orphan_braces(text)
+
+    if not open_stack and not orphan_close:
+        return text
+
+    total_orphans = len(open_stack) + len(orphan_close)
+    hint = source_hint or "<unknown>"
+
+    if total_orphans > _MAX_ORPHAN_BRACES:
+        logger.warning(
+            "Brace imbalance too large to auto-fix (%d orphans) in %s — skipping",
+            total_orphans,
+            hint,
+        )
+        return text
+
+    for pos in open_stack:
+        line_num = text[:pos].count("\n") + 1
+        logger.debug("Removing orphan '{' at line %d in %s", line_num, hint)
+    for pos in orphan_close:
+        line_num = text[:pos].count("\n") + 1
+        logger.debug("Removing orphan '}' at line %d in %s", line_num, hint)
+
+    to_remove = set(open_stack) | set(orphan_close)
+    return "".join(ch for i, ch in enumerate(text) if i not in to_remove)
+
+
+def preprocess(text: str, *, source_hint: str = "") -> str:
     """Apply all preprocessing transformations in the correct order."""
     text = strip_document_wrapper(text)
     text = strip_input_directives(text)
@@ -208,5 +302,7 @@ def preprocess(text: str) -> str:
     text = convert_callout_env(text)
     text = convert_warning_macro(text)
     text = convert_wherelist_env(text)
+    text = strip_tex_spacing_primitives(text)
     text = clean_label_commands(text)
+    text = fix_unbalanced_braces(text, source_hint=source_hint)
     return text
