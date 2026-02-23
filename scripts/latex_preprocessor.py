@@ -5,7 +5,7 @@ Handles custom macros and environments that Pandoc cannot process directly:
 - Bracket macros: \\PB{}, \\RB{}, \\CB{}
 - callout environment -> quote (Pandoc-friendly)
 - \\warning{} -> bold warning markers
-- Strip \\input{} directives (leaf files are converted independently)
+- Strip \\input{} directives (child files are separate pages)
 """
 
 from __future__ import annotations
@@ -142,7 +142,11 @@ def convert_warning_macro(text: str) -> str:
 
 
 def strip_input_directives(text: str) -> str:
-    r"""Strip \input{} directives since leaf files are converted independently."""
+    r"""Strip \input{} directives.
+
+    Content from child files is converted as separate pages; the parent page
+    gets a generated table of contents linking to them (see ``convert.py``).
+    """
     return re.sub(r"\\input\{[^}]*\}", "", text)
 
 
@@ -242,6 +246,12 @@ def _find_orphan_braces(text: str) -> tuple[list[int], list[int]]:
         if ch == "%" and (i == 0 or text[i - 1] != "\\"):
             while i < n and text[i] != "\n":
                 i += 1
+            continue
+
+        # Skip double-backslash (LaTeX linebreak \\) so that \\{ is not
+        # misread as \{ (escaped brace).  The { after \\ is a real brace.
+        if ch == "\\" and i + 1 < n and text[i + 1] == "\\":
+            i += 2
             continue
 
         # Skip escaped braces: \{ and \}

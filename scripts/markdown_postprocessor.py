@@ -1,6 +1,7 @@
 """Post-Pandoc Markdown cleanup for EnergyPlus documentation.
 
 Handles:
+- Internal PDF link rewriting (inter-doc-set references)
 - Ordered list detection (non-breaking space after number markers)
 - Admonition formatting for Zensical (4-space indent)
 - Image path rewriting relative to output file location
@@ -15,6 +16,45 @@ from __future__ import annotations
 import re
 
 from scripts.models import LabelRef
+
+# Map PDF filenames used in \href{...} to their doc-set URL slugs.
+# These are inter-doc-set cross-references left over from the original
+# EnergyPlus LaTeX build where each doc set produced a separate PDF.
+_PDF_TO_SLUG: dict[str, str] = {
+    "InputOutputReference.pdf": "io-reference",
+    "EngineeringReference.pdf": "engineering-reference",
+    "EngineeringDoc.pdf": "engineering-reference",
+    "GettingStarted.pdf": "getting-started",
+    "OutputDetailsAndExamples.pdf": "output-details",
+    "AuxiliaryPrograms.pdf": "auxiliary-programs",
+    "InterfaceDeveloper.pdf": "interface-developer",
+}
+
+
+def rewrite_internal_pdf_links(text: str, rel_depth: int = 0) -> str:
+    """Rewrite links to internal PDF doc sets as relative site paths.
+
+    After Pandoc, ``\\href{InputOutputReference.pdf}{text}`` becomes
+    ``[text](InputOutputReference.pdf)``.  We replace the PDF target with a
+    relative path to the corresponding doc-set index page on the site.
+
+    A page at depth *rel_depth* inside its doc set needs ``rel_depth + 1``
+    parent traversals (``../``) to reach the site root before descending into
+    the target doc set.
+    """
+    prefix = "../" * (rel_depth + 1)
+
+    def rewrite(m: re.Match) -> str:
+        link_text = m.group(1)
+        path = m.group(2)
+        # Extract the bare filename from potentially deep relative paths
+        filename = path.rsplit("/", 1)[-1]
+        slug = _PDF_TO_SLUG.get(filename)
+        if slug:
+            return f"[{link_text}]({prefix}{slug}/)"
+        return m.group(0)
+
+    return re.sub(r"\[([^\]]+)\]\(([^)]*\.pdf)\)", rewrite, text)
 
 
 def fix_ordered_list_markers(text: str) -> str:
@@ -187,6 +227,7 @@ def postprocess(
     if title is None:
         title = extract_title(text)
 
+    text = rewrite_internal_pdf_links(text, rel_depth=rel_depth)
     text = fix_ordered_list_markers(text)
     text = fix_admonition_indent(text)
     text = rewrite_image_paths(text, doc_set_slug, rel_depth=rel_depth)

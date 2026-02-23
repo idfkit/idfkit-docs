@@ -29,7 +29,7 @@ from scripts.config import (
 from scripts.latex_preprocessor import preprocess
 from scripts.markdown_postprocessor import postprocess
 from scripts.models import ConversionResult, DocSet, DocSetResult, LabelRef, VersionResult
-from scripts.nav_generator import generate_nav, parse_input_chain
+from scripts.nav_generator import extract_heading, generate_nav, parse_input_chain
 
 logger = logging.getLogger(__name__)
 
@@ -228,6 +228,50 @@ def generate_doc_set_index(doc_set: DocSet, output_dir: Path, first_page: str) -
     index_path.write_text(f"---\ntitle: {doc_set.title}\n---\n\n# {doc_set.title}\n")
 
 
+def _append_child_toc(
+    parent_md: Path,
+    children: list[str],
+    doc_set: DocSet,
+) -> None:
+    """Append a table-of-contents list to a parent page linking to its children.
+
+    Parent pages that originally used ``\\input{}`` to include child files get
+    their ``\\input`` directives stripped during preprocessing, leaving only the
+    chapter heading.  This function adds a markdown list of links to those child
+    pages so the parent page is not empty.
+    """
+    toc_lines = ["\n## Contents\n"]
+    for child_inp in children:
+        if child_inp.endswith("/title"):
+            continue
+        tex_path = doc_set.source_dir / f"{child_inp}.tex"
+        title, _level = extract_heading(tex_path)
+        # Build a relative path from the parent to the child .md file.
+        # Parent is at  <slug>/<chapter>.md
+        # Child  is at  <slug>/<chapter>/<section>.md
+        # So relative link is  <chapter>/<section>.md
+        child_rel = child_inp[4:] if child_inp.startswith("src/") else child_inp
+        # The child path relative to the parent's directory
+        parent_stem = parent_md.stem  # e.g. "appendix-a-units-and-abbreviations"
+        child_filename = child_rel.split("/", 1)[1] if "/" in child_rel else child_rel
+        toc_lines.append(f"- [{title}]({parent_stem}/{child_filename}.md)")
+
+    if len(toc_lines) > 1:  # More than just the heading
+        existing = parent_md.read_text()
+        parent_md.write_text(existing.rstrip() + "\n" + "\n".join(toc_lines) + "\n")
+
+
+def _build_parent_children_map(inputs: list[str]) -> dict[str, list[str]]:
+    """Build a map of parent input paths to their child input paths."""
+    parent_children: dict[str, list[str]] = {}
+    for inp in inputs:
+        parts = inp.replace("src/", "").split("/")
+        if len(parts) >= 2:
+            parent = f"src/{parts[0]}"
+            parent_children.setdefault(parent, []).append(inp)
+    return parent_children
+
+
 def convert_doc_set(
     doc_set: DocSet,
     output_dir: Path,
@@ -239,8 +283,11 @@ def convert_doc_set(
     # Copy media files
     copy_media(doc_set, output_dir / "docs")
 
-    # Parse input chain
+    # Parse input chain recursively to discover all files
     inputs = parse_input_chain(doc_set.main_tex)
+
+    # Build map of parent -> children for TOC generation
+    parent_children = _build_parent_children_map(inputs)
 
     for inp in inputs:
         # Skip title
@@ -272,6 +319,10 @@ def convert_doc_set(
         elif file_result.warnings:
             for w in file_result.warnings:
                 logger.debug("Warning for %s: %s", tex_path, w)
+
+        # For parent pages, append a table of contents linking to children
+        if file_result.success and inp in parent_children:
+            _append_child_toc(output_path, parent_children[inp], doc_set)
 
     # Generate section index page
     first_page = ""

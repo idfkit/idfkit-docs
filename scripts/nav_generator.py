@@ -16,20 +16,37 @@ from scripts.models import NavItem
 logger = logging.getLogger(__name__)
 
 
-def parse_input_chain(main_tex: Path) -> list[str]:
-    r"""Parse \input{src/...} entries from a main .tex file.
+def parse_input_chain(main_tex: Path, *, _root: Path | None = None) -> list[str]:
+    r"""Parse \input{src/...} entries from a .tex file, recursively.
 
-    Returns list of relative paths (e.g., ["src/energyplus-overview",
-    "src/energyplus-overview/what-is-energyplus"]).
+    Returns a flat list of relative paths in document order, e.g.
+    ``["src/overview", "src/overview/what-is-energyplus", ...]``.
+
+    Chapter-level files that themselves contain ``\input`` directives are
+    included *before* their children so the nav builder sees the chapter
+    entry first.
     """
     if not main_tex.exists():
         return []
 
+    # On the initial call the root is the doc-set directory (parent of the
+    # main .tex file).  Recursive calls reuse the same root so that
+    # \input{src/...} paths always resolve relative to the doc-set root.
+    root = _root if _root is not None else main_tex.parent
     text = main_tex.read_text(errors="replace")
-    inputs = []
+    inputs: list[str] = []
 
     for m in re.finditer(r"\\input\{(src/[^}]+)\}", text):
-        inputs.append(m.group(1))
+        rel = m.group(1)
+        inputs.append(rel)
+
+        # Recurse into the referenced file if it also contains \input entries
+        child_tex = root / f"{rel}.tex"
+        if child_tex.exists():
+            child_text = child_tex.read_text(errors="replace")
+            if r"\input{src/" in child_text:
+                children = parse_input_chain(child_tex, _root=root)
+                inputs.extend(children)
 
     return inputs
 
