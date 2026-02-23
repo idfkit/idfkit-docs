@@ -49,16 +49,15 @@ def generate_root_landing(output_dir: Path, versions: list[str]) -> Path:
     Returns:
         Path to the generated index.html
     """
-    latest = versions[0] if versions else LATEST_VERSION
-    latest_short = version_to_short(latest)
-    latest_title = version_to_title(latest)
+    latest_short = version_to_short(LATEST_VERSION)
+    latest_title = version_to_title(LATEST_VERSION)
 
     # Build version cards HTML
     version_cards = []
     for i, v in enumerate(versions):
         short = version_to_short(v)
         title = version_to_title(v)
-        is_latest = v == latest
+        is_latest = v == LATEST_VERSION
         badge = '<span class="badge">latest</span>' if is_latest else ""
         # Assign era labels
         major = int(title.split(".")[0])
@@ -237,7 +236,10 @@ def merge_version_outputs(
             shutil.rmtree(target)
         shutil.copytree(site_dir, target)
 
-    # Generate versions.json and landing page
-    versions = sorted(version_build_dirs.keys(), reverse=True)
+    # Generate versions.json and landing page (newest first)
+    def _version_key(v: str) -> tuple[int, ...]:
+        return tuple(int(x) for x in v.lstrip("v").split("."))
+
+    versions = sorted(version_build_dirs.keys(), key=_version_key, reverse=True)
     generate_versions_json(versions, deploy_dir)
     generate_root_landing(deploy_dir, versions)

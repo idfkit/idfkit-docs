@@ -162,6 +162,25 @@ def convert_wherelist_env(text: str) -> str:
     )
 
 
+def strip_longtable_continuations(text: str) -> str:
+    r"""Strip longtable continuation headers/footers used only for PDF pagination.
+
+    Longtables define \endfirsthead (first-page header), \endhead (continuation
+    header), \endfoot, and \endlastfoot blocks. Only the first-page header is
+    needed for Markdown output; the rest cause duplicate rows in Pandoc's AST.
+    """
+    # Remove from \endfirsthead through \endhead (continuation header block)
+    text = re.sub(r"\\endfirsthead.*?\\endhead", "", text, flags=re.DOTALL)
+    # Remove from \endfoot through \endlastfoot (footer blocks)
+    text = re.sub(r"\\endfoot.*?\\endlastfoot", "", text, flags=re.DOTALL)
+    # Clean up any remaining standalone markers
+    text = re.sub(r"\\endfirsthead\b", "", text)
+    text = re.sub(r"\\endhead\b", "", text)
+    text = re.sub(r"\\endfoot\b", "", text)
+    text = re.sub(r"\\endlastfoot\b", "", text)
+    return text
+
+
 def strip_document_wrapper(text: str) -> str:
     r"""Strip \begin{document}...\end{document} and preamble for leaf files."""
     marker = r"\begin{document}"
@@ -183,6 +202,7 @@ def preprocess(text: str) -> str:
     """Apply all preprocessing transformations in the correct order."""
     text = strip_document_wrapper(text)
     text = strip_input_directives(text)
+    text = strip_longtable_continuations(text)
     text = expand_si_macros(text)
     text = expand_bracket_macros(text)
     text = convert_callout_env(text)

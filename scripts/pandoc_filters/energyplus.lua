@@ -1,10 +1,117 @@
 -- Pandoc Lua filter for EnergyPlus documentation
 --
 -- Handles:
--- 1. BlockQuote -> admonition conversion (from callout environment)
--- 2. Image path resolution (media/ relative references)
--- 3. Cross-reference handling via label index
--- 4. Definition list formatting for wherelist remnants
+-- 1. Table -> pipe-table markdown (longtable, tabular)
+-- 2. CodeBlock -> fenced code blocks with language class
+-- 3. BlockQuote -> admonition conversion (from callout environment)
+-- 4. Image path resolution (media/ relative references)
+-- 5. Cross-reference handling via label index
+-- 6. Definition list formatting for wherelist remnants
+
+-- Convert Table elements to pipe-table markdown for proper rendering.
+-- Pandoc's default simple-table output wrapped in ::: divs is not supported
+-- by Zensical. We serialize tables as standard pipe tables instead.
+function Table(el)
+    local function cell_to_text(cell)
+        local doc = pandoc.Pandoc(cell.contents)
+        local text = pandoc.write(doc, "markdown")
+        -- Trim trailing whitespace/newlines
+        text = text:gsub("%s+$", "")
+        -- Collapse newlines to spaces (pipe tables need single-line cells)
+        text = text:gsub("\n", " ")
+        -- Escape pipe characters in content
+        text = text:gsub("|", "\\|")
+        return text
+    end
+
+    local lines = {}
+    local num_cols = #el.colspecs
+
+    -- Extract header rows
+    local header_cells = {}
+    if el.head and el.head.rows then
+        for _, row in ipairs(el.head.rows) do
+            local cells = {}
+            for _, cell in ipairs(row.cells) do
+                table.insert(cells, cell_to_text(cell))
+            end
+            if #cells > 0 then
+                header_cells = cells
+            end
+        end
+    end
+
+    -- Fall back to body rows for column count
+    if num_cols == 0 then
+        num_cols = #header_cells
+    end
+    if num_cols == 0 then
+        for _, body in ipairs(el.bodies) do
+            for _, row in ipairs(body.body) do
+                num_cols = #row.cells
+                break
+            end
+            if num_cols > 0 then break end
+        end
+    end
+
+    if num_cols == 0 then
+        return el  -- Can't determine column count, leave as-is
+    end
+
+    -- Header row
+    if #header_cells > 0 then
+        table.insert(lines, "| " .. table.concat(header_cells, " | ") .. " |")
+    else
+        local empty = {}
+        for i = 1, num_cols do table.insert(empty, " ") end
+        table.insert(lines, "| " .. table.concat(empty, " | ") .. " |")
+    end
+
+    -- Separator row
+    local seps = {}
+    for i = 1, num_cols do
+        table.insert(seps, "---")
+    end
+    table.insert(lines, "| " .. table.concat(seps, " | ") .. " |")
+
+    -- Body rows
+    for _, body in ipairs(el.bodies) do
+        for _, row in ipairs(body.body) do
+            local cells = {}
+            for _, cell in ipairs(row.cells) do
+                table.insert(cells, cell_to_text(cell))
+            end
+            while #cells < num_cols do
+                table.insert(cells, "")
+            end
+            table.insert(lines, "| " .. table.concat(cells, " | ") .. " |")
+        end
+    end
+
+    -- Caption
+    local caption_text = ""
+    if el.caption and el.caption.long and #el.caption.long > 0 then
+        local cap_doc = pandoc.Pandoc(el.caption.long)
+        caption_text = pandoc.write(cap_doc, "markdown"):gsub("%s+$", "")
+    end
+    if caption_text ~= "" then
+        table.insert(lines, "")
+        table.insert(lines, "*Table: " .. caption_text .. "*")
+    end
+
+    return pandoc.RawBlock("markdown", table.concat(lines, "\n"))
+end
+
+-- Tag code blocks (from lstlisting/verbatim) so Pandoc emits fenced blocks.
+-- Nearly all code in EnergyPlus docs is IDF; the class also enables future
+-- syntax highlighting.
+function CodeBlock(el)
+    if #el.classes == 0 then
+        table.insert(el.classes, "idf")
+    end
+    return el
+end
 
 -- Convert BlockQuotes (originally callout environments) to admonition syntax.
 -- Pandoc converts \begin{quote}...\end{quote} to BlockQuote elements.

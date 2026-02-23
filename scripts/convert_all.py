@@ -30,22 +30,31 @@ CLONE_DIR = BUILD_DIR / "sources"
 
 
 def clone_version(version: str, clone_dir: Path) -> Path:
-    """Shallow-clone the EnergyPlus repo at a specific version tag.
+    """Sparse-clone only the doc/ directory of the EnergyPlus repo at a specific version tag.
 
+    Uses --filter=blob:none with sparse-checkout so we download ~90 MB
+    instead of ~1.4 GB per version.
     Returns the path to the cloned repo.
     """
     target = clone_dir / version
-    if target.exists():
+    if target.exists() and (target / "doc").exists():
         logger.info("Source for %s already exists, reusing", version)
         return target
 
-    target.mkdir(parents=True, exist_ok=True)
-    logger.info("Cloning EnergyPlus %s (shallow)...", version)
+    # Clean up any partial clone
+    if target.exists():
+        import shutil
+
+        shutil.rmtree(target)
+
+    logger.info("Cloning EnergyPlus %s (sparse, doc/ only)...", version)
 
     subprocess.run(
         [
             "git",
             "clone",
+            "--filter=blob:none",
+            "--no-checkout",
             "--depth=1",
             "--branch",
             version,
@@ -56,6 +65,16 @@ def clone_version(version: str, clone_dir: Path) -> Path:
         check=True,
         capture_output=True,
         text=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(target), "sparse-checkout", "set", "doc"],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(target), "checkout"],
+        check=True,
+        capture_output=True,
     )
 
     return target

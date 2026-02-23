@@ -20,7 +20,7 @@ docs-test: ## Test if documentation can be built without errors
 	@uv run zensical build
 
 .PHONY: docs
-docs: ## Serve a converted version locally (usage: make docs VERSION=v25.2.0)
+docs: ## Serve a single version locally (usage: make docs [VERSION=v25.2.0])
 	@if [ -z "$(VERSION)" ]; then \
 		SHORT=$$(ls -d build/v*/ 2>/dev/null | head -1 | xargs basename); \
 		if [ -z "$$SHORT" ]; then echo "No built versions found. Run 'make convert VERSION=v25.2.0' first."; exit 1; fi; \
@@ -33,14 +33,26 @@ docs: ## Serve a converted version locally (usage: make docs VERSION=v25.2.0)
 		cd build/$$SHORT && uv run zensical serve; \
 	fi
 
+.PHONY: serve
+serve: ## Serve the full multi-version site from dist/ (run convert-all first)
+	@if [ ! -d dist ] || [ ! -f dist/index.html ]; then \
+		echo "No dist/ found. Run 'make convert-all' first."; exit 1; \
+	fi
+	@echo "Serving full site from dist/ on http://localhost:8000"
+	@python -m http.server 8000 --directory dist
+
 .PHONY: convert
 convert: ## Convert a single EnergyPlus version (usage: make convert VERSION=v25.2.0)
 	@if [ -z "$(VERSION)" ]; then echo "Usage: make convert VERSION=v25.2.0"; exit 1; fi
 	@echo "Converting EnergyPlus $(VERSION)..."
 	@mkdir -p build/sources
-	@if [ ! -d "build/sources/$(VERSION)" ]; then \
-		git clone --depth=1 --branch $(VERSION) --single-branch \
-			https://github.com/NatLabRockies/EnergyPlus.git build/sources/$(VERSION); \
+	@if [ ! -d "build/sources/$(VERSION)/doc" ]; then \
+		rm -rf "build/sources/$(VERSION)"; \
+		git clone --filter=blob:none --no-checkout --depth=1 \
+			--branch $(VERSION) --single-branch \
+			https://github.com/NatLabRockies/EnergyPlus.git build/sources/$(VERSION) && \
+		git -C build/sources/$(VERSION) sparse-checkout set doc && \
+		git -C build/sources/$(VERSION) checkout; \
 	fi
 	@uv run python -m scripts.convert \
 		--source build/sources/$(VERSION) \

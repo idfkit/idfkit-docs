@@ -24,8 +24,6 @@ from scripts.config import (
     SITE_AUTHOR,
     SITE_DESCRIPTION,
     SITE_NAME,
-    SITE_URL_BASE,
-    version_to_short,
     version_to_title,
 )
 from scripts.latex_preprocessor import preprocess
@@ -223,6 +221,13 @@ def convert_tex_file(
         )
 
 
+def generate_doc_set_index(doc_set: DocSet, output_dir: Path, first_page: str) -> None:
+    """Generate an index.md for a doc set section so browsing the section URL works."""
+    index_path = output_dir / "docs" / doc_set.slug / "index.md"
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    index_path.write_text(f"---\ntitle: {doc_set.title}\n---\n\n# {doc_set.title}\n")
+
+
 def convert_doc_set(
     doc_set: DocSet,
     output_dir: Path,
@@ -267,6 +272,16 @@ def convert_doc_set(
         elif file_result.warnings:
             for w in file_result.warnings:
                 logger.debug("Warning for %s: %s", tex_path, w)
+
+    # Generate section index page
+    first_page = ""
+    for inp in inputs:
+        if inp == "src/title" or inp.endswith("/title"):
+            continue
+        md_rel = inp[4:] if inp.startswith("src/") else inp
+        first_page = f"{md_rel}.md"
+        break
+    generate_doc_set_index(doc_set, output_dir, first_page)
 
     return result
 
@@ -314,7 +329,6 @@ def generate_zensical_config(
     output_dir: Path,
 ) -> None:
     """Generate the zensical.toml config for this version."""
-    short_version = version_to_short(version)
     version_title = version_to_title(version)
 
     # Build navigation
@@ -324,10 +338,11 @@ def generate_zensical_config(
         if ds_nav:
             nav_tabs.append((ds.title, ds.slug, ds_nav))
 
-    # Build nav as top-level array with one entry per doc set tab
+    # Build nav as top-level array with one entry per doc set tab.
+    # Prepend the section index.md so browsing the section URL works.
     nav_data = []
-    for title, _slug, items in nav_tabs:
-        nav_data.append({title: items})
+    for title, slug, items in nav_tabs:
+        nav_data.append({title: [{title: f"{slug}/index.md"}, *items]})
 
     # Serialize nav to TOML
     nav_lines = []
@@ -338,7 +353,7 @@ def generate_zensical_config(
     config_lines = [
         "[project]",
         f'site_name = "{SITE_NAME} - {version_title}"',
-        f'site_url = "{SITE_URL_BASE}/{short_version}/"',
+        'site_url = "/"',
         f'site_description = "{SITE_DESCRIPTION}"',
         f'site_author = "{SITE_AUTHOR}"',
         'copyright = "EnergyPlus is a trademark of the US Department of Energy."',

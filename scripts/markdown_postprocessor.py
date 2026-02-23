@@ -145,6 +145,20 @@ def clean_empty_links(text: str) -> str:
     return text
 
 
+def clean_div_wrappers(text: str) -> str:
+    """Remove Pandoc ::: div wrappers that Zensical doesn't support."""
+    lines = text.split("\n")
+    result = []
+    for line in lines:
+        stripped = line.strip()
+        # Match ::: fences (any number of colons >=3), optionally with
+        # class names or attributes: :::, :::: center, ::: {#id .class}
+        if re.match(r"^:{3,}(\s.*)?$", stripped):
+            continue
+        result.append(line)
+    return "\n".join(result)
+
+
 def postprocess(
     text: str,
     title: str | None = None,
@@ -166,6 +180,7 @@ def postprocess(
     text = clean_equation_labels(text)
     text = clean_pandoc_artifacts(text)
     text = clean_empty_links(text)
+    text = clean_div_wrappers(text)
     text = add_front_matter(text, title)
 
     return text
