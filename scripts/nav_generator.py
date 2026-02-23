@@ -103,7 +103,16 @@ def build_nav_tree(inputs: list[str], doc_set_dir: Path, doc_set_slug: str) -> l
     """Build a navigation tree from the input chain.
 
     Groups leaf files under their parent chapter entries.
+    Chapters that have children use ``<chapter>/index.md`` so that
+    Zensical's ``navigation.indexes`` makes the section header clickable.
     """
+    # Pre-scan to know which chapters have children
+    chapters_with_children: set[str] = set()
+    for inp in inputs:
+        parts = inp.replace("src/", "").split("/")
+        if len(parts) >= 2:
+            chapters_with_children.add(parts[0])
+
     nav_items: list[NavItem] = []
     current_chapter: NavItem | None = None
 
@@ -113,18 +122,22 @@ def build_nav_tree(inputs: list[str], doc_set_dir: Path, doc_set_slug: str) -> l
             continue
 
         tex_path = doc_set_dir / f"{inp}.tex"
-        md_path = input_path_to_md_path(inp)
         title, _level = extract_heading(tex_path)
 
         parts = inp.replace("src/", "").split("/")
 
         if len(parts) == 1:
             # Chapter-level entry
-            item = NavItem(title=title, path=f"{doc_set_slug}/{md_path}")
+            if parts[0] in chapters_with_children:
+                path = f"{doc_set_slug}/{parts[0]}/index.md"
+            else:
+                path = f"{doc_set_slug}/{input_path_to_md_path(inp)}"
+            item = NavItem(title=title, path=path)
             current_chapter = item
             nav_items.append(item)
         elif len(parts) >= 2:
             # Section-level entry (child of a chapter)
+            md_path = input_path_to_md_path(inp)
             item = NavItem(title=title, path=f"{doc_set_slug}/{md_path}")
             if current_chapter is not None:
                 current_chapter.children.append(item)
@@ -141,7 +154,9 @@ def nav_to_zensical_format(nav_items: list[NavItem]) -> list:
     for item in nav_items:
         if item.children:
             children = [{child.title: child.path} for child in item.children]
-            result.append({item.title: [{item.title: item.path}, *children]})
+            # The index page is listed first without a title so that
+            # navigation.indexes makes the section header clickable.
+            result.append({item.title: [item.path, *children]})
         else:
             result.append({item.title: item.path})
     return result

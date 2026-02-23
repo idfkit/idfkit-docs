@@ -64,12 +64,6 @@ IMAGE_EXTENSIONS: set[str] = {
     ".eps",
 }
 
-# Default site configuration
-SITE_NAME: str = "EnergyPlus Documentation"
-SITE_URL_BASE: str = "https://docs.idfkit.com"
-SITE_DESCRIPTION: str = "EnergyPlus documentation built with Zensical"
-SITE_AUTHOR: str = "Samuel Letellier-Duchesne"
-
 
 def version_to_short(version: str) -> str:
     """Convert a full version tag like 'v25.2.0' to a short form like 'v25.2'."""

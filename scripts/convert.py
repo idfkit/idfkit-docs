@@ -10,6 +10,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import copy
 import logging
 import re
 import shutil
@@ -17,13 +18,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+import tomli_w
+import tomllib
+
 from scripts.config import (
     DOC_SET_INFO,
     EXCLUDED_DIRS,
     IMAGE_EXTENSIONS,
-    SITE_AUTHOR,
-    SITE_DESCRIPTION,
-    SITE_NAME,
     version_to_title,
 )
 from scripts.latex_preprocessor import preprocess
@@ -33,6 +34,7 @@ from scripts.nav_generator import extract_heading, generate_nav, parse_input_cha
 
 logger = logging.getLogger(__name__)
 
+ROOT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "zensical.toml"
 FILTER_PATH = Path(__file__).parent / "pandoc_filters" / "energyplus.lua"
 
 
@@ -246,15 +248,12 @@ def _append_child_toc(
             continue
         tex_path = doc_set.source_dir / f"{child_inp}.tex"
         title, _level = extract_heading(tex_path)
-        # Build a relative path from the parent to the child .md file.
-        # Parent is at  <slug>/<chapter>.md
+        # Parent is at  <slug>/<chapter>/index.md
         # Child  is at  <slug>/<chapter>/<section>.md
-        # So relative link is  <chapter>/<section>.md
+        # So relative link is just <section>.md (same directory)
         child_rel = child_inp[4:] if child_inp.startswith("src/") else child_inp
-        # The child path relative to the parent's directory
-        parent_stem = parent_md.stem  # e.g. "appendix-a-units-and-abbreviations"
         child_filename = child_rel.split("/", 1)[1] if "/" in child_rel else child_rel
-        toc_lines.append(f"- [{title}]({parent_stem}/{child_filename}.md)")
+        toc_lines.append(f"- [{title}]({child_filename}.md)")
 
     if len(toc_lines) > 1:  # More than just the heading
         existing = parent_md.read_text()
@@ -270,6 +269,16 @@ def _build_parent_children_map(inputs: list[str]) -> dict[str, list[str]]:
             parent = f"src/{parts[0]}"
             parent_children.setdefault(parent, []).append(inp)
     return parent_children
+
+
+def _output_path_for_input(inp: str, doc_set_slug: str, output_dir: Path, is_parent: bool) -> tuple[Path, int]:
+    """Compute the output .md path and rel_depth for an input entry."""
+    md_rel = inp[4:] if inp.startswith("src/") else inp
+    if is_parent:
+        # Parent pages become index.md inside their chapter folder
+        # so navigation.indexes makes the section header clickable.
+        return output_dir / "docs" / doc_set_slug / md_rel / "index.md", md_rel.count("/") + 1
+    return output_dir / "docs" / doc_set_slug / f"{md_rel}.md", md_rel.count("/")
 
 
 def convert_doc_set(
@@ -307,9 +316,7 @@ def convert_doc_set(
             continue
 
         # Compute output path and depth within doc set
-        md_rel = inp[4:] if inp.startswith("src/") else inp
-        output_path = output_dir / "docs" / doc_set.slug / f"{md_rel}.md"
-        rel_depth = md_rel.count("/")
+        output_path, rel_depth = _output_path_for_input(inp, doc_set.slug, output_dir, is_parent=inp in parent_children)
 
         file_result = convert_tex_file(tex_path, output_path, doc_set.slug, label_index, rel_depth=rel_depth)
         result.file_results.append(file_result)
@@ -359,34 +366,29 @@ Welcome to the EnergyPlus {version_title} documentation.
     index_path.write_text(content)
 
 
-def _escape_toml_string(s: str) -> str:
-    """Escape a string for use inside TOML double-quoted strings."""
-    return s.replace("\\", "\\\\").replace('"', '\\"')
-
-
-def _nav_item_to_toml(item: dict | str, indent: int = 0) -> str:
-    """Serialize a single nav item to TOML array-of-tables syntax."""
-    prefix = "  " * indent
-    if isinstance(item, str):
-        return f'{prefix}"{_escape_toml_string(item)}"'
-    # Dict with one key
-    for title, value in item.items():
-        escaped_title = _escape_toml_string(title)
-        if isinstance(value, str):
-            return f'{prefix}{{ "{escaped_title}" = "{_escape_toml_string(value)}" }}'
-        if isinstance(value, list):
-            children = ",\n".join(_nav_item_to_toml(child, indent + 1) for child in value)
-            return f'{prefix}{{ "{escaped_title}" = [\n{children},\n{prefix}] }}'
-    return ""
-
-
 def generate_zensical_config(
     version: str,
     doc_sets: list[DocSet],
     output_dir: Path,
 ) -> None:
-    """Generate the zensical.toml config for this version."""
+    """Generate the zensical.toml config for this version.
+
+    Reads the root zensical.toml as a base, applies version-specific
+    overrides (site_name, site_url, nav, versioning, MathJax), and
+    writes the merged config with tomli_w.
+    """
     version_title = version_to_title(version)
+
+    # Load root config as base
+    with ROOT_CONFIG_PATH.open("rb") as f:
+        config = tomllib.load(f)
+    config = copy.deepcopy(config)
+
+    project = config.setdefault("project", {})
+
+    # Version-specific overrides
+    project["site_name"] = f"{project.get('site_name', 'EnergyPlus Documentation')} - {version_title}"
+    project["site_url"] = "/"
 
     # Build navigation
     nav_tabs = []
@@ -395,78 +397,22 @@ def generate_zensical_config(
         if ds_nav:
             nav_tabs.append((ds.title, ds.slug, ds_nav))
 
-    # Build nav as top-level array with one entry per doc set tab.
-    # Prepend the section index.md so browsing the section URL works.
     nav_data = []
     for title, slug, items in nav_tabs:
         nav_data.append({title: [{title: f"{slug}/index.md"}, *items]})
+    project["nav"] = nav_data
 
-    # Serialize nav to TOML
-    nav_lines = []
-    for entry in nav_data:
-        nav_lines.append(_nav_item_to_toml(entry, 1))
+    # Version provider for mike
+    extra = project.setdefault("extra", {})
+    extra["version"] = {"provider": "mike", "default": "stable"}
 
-    # Theme features
-    features = [
-        "navigation.tabs",
-        "navigation.instant",
-        "navigation.instant.prefetch",
-        "navigation.path",
-        "navigation.sections",
-        "navigation.indexes",
-        "navigation.top",
-        "navigation.tracking",
-        "content.code.copy",
-    ]
-    features_str = ", ".join(f'"{f}"' for f in features)
-
-    # Generate TOML config
-    config_lines = [
-        "[project]",
-        f'site_name = "{SITE_NAME} - {version_title}"',
-        'site_url = "/"',
-        f'site_description = "{SITE_DESCRIPTION}"',
-        f'site_author = "{SITE_AUTHOR}"',
-        'copyright = "EnergyPlus is a trademark of the US Department of Energy."',
-        "nav = [\n{},\n]".format(",\n".join(nav_lines)) if nav_lines else "",
-        "",
-        "[project.theme]",
-        'variant = "modern"',
-        f"features = [{features_str}]",
-        "",
-        "[project.theme.icon]",
-        'logo = "material/flash"',
-        "",
-        "[[project.theme.palette]]",
-        'scheme = "default"',
-        'primary = "teal"',
-        'accent = "amber"',
-        "",
-        "[project.theme.palette.toggle]",
-        'icon = "material/brightness-7"',
-        'name = "Switch to dark mode"',
-        "",
-        "[[project.theme.palette]]",
-        'scheme = "slate"',
-        'primary = "teal"',
-        'accent = "amber"',
-        "",
-        "[project.theme.palette.toggle]",
-        'icon = "material/brightness-4"',
-        'name = "Switch to light mode"',
-        "",
-        "[project.extra.version]",
-        'provider = "mike"',
-        'default = "stable"',
-        "",
-        "[[project.extra_javascript]]",
-        'path = "https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js"',
-        "async = true",
-        "",
+    # MathJax
+    project["extra_javascript"] = [
+        {"path": "https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js", "async": True},
     ]
 
     config_path = output_dir / "zensical.toml"
-    config_path.write_text("\n".join(config_lines) + "\n")
+    config_path.write_text(tomli_w.dumps(config))
 
 
 def build_site(output_dir: Path) -> tuple[bool, str]:

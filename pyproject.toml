@@ -17,6 +17,7 @@ dev = [
     "pre-commit>=2.20.0",
     "ruff>=0.11.5",
     "pypandoc>=1.14",
+    "tomli_w>=1.0",
 ]
 
 [tool.ruff]
