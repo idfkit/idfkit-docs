@@ -9,6 +9,7 @@ Handles:
 - Equation label conversion to MathJax-compatible format
 - YAML front matter generation
 - Pandoc artifact cleanup
+- Typographic dash conversion in headings
 """
 
 from __future__ import annotations
@@ -174,6 +175,23 @@ def clean_equation_labels(text: str) -> str:
     return re.sub(r"\$\$\n(.*?)\n\$\$", add_tag, text, flags=re.DOTALL)
 
 
+def fix_heading_dashes(text: str) -> str:
+    """Convert double-dashes to en-dashes in headings.
+
+    LaTeX renders ``--`` as an en-dash, but Pandoc outputs literal ``--``
+    in Markdown headings.  This restores the intended typographic dash.
+    """
+    en_dash = "\u2013"
+
+    def replace_dashes(m: re.Match) -> str:
+        hashes = m.group(1)
+        title = m.group(2)
+        title = title.replace(" -- ", f" {en_dash} ")
+        return f"{hashes} {title}"
+
+    return re.sub(r"^(#{1,6})\s+(.+)$", replace_dashes, text, flags=re.MULTILINE)
+
+
 def clean_pandoc_artifacts(text: str) -> str:
     """Remove Pandoc artifacts from the converted markdown."""
     # Remove {.unnumbered} from headings
@@ -234,6 +252,7 @@ def postprocess(
     text = resolve_cross_references(text, label_index)
     text = clean_equation_labels(text)
     text = clean_pandoc_artifacts(text)
+    text = fix_heading_dashes(text)
     text = clean_empty_links(text)
     text = clean_div_wrappers(text)
     text = add_front_matter(text, title)
