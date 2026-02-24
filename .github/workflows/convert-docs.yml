@@ -51,7 +51,7 @@ jobs:
           fi
 
           # Convert comma-separated to JSON array
-          JSON_ARRAY=$(echo "$VERSIONS" | tr ',' '\n' | jq -R . | jq -s 'map(select(length > 0))')
+          JSON_ARRAY=$(echo "$VERSIONS" | tr ',' '\n' | jq -R . | jq -sc 'map(select(length > 0))')
           echo "matrix={\"version\":${JSON_ARRAY}}" >> "$GITHUB_OUTPUT"
           echo "all_versions=${VERSIONS}" >> "$GITHUB_OUTPUT"
 
