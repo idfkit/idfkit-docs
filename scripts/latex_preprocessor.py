@@ -113,12 +113,74 @@ def expand_si_macros(text: str) -> str:
     return text
 
 
+def _find_brace_content(text: str, start: int) -> tuple[str, int] | None:
+    """Find the content of a brace group starting at *start*, handling arbitrary nesting.
+
+    *start* must point to the opening ``{``.  Returns ``(content, end)``
+    where *end* is the index just past the closing ``}``, or ``None`` if
+    the braces are unbalanced.
+    """
+    if start >= len(text) or text[start] != "{":
+        return None
+    depth = 1
+    i = start + 1
+    while i < len(text) and depth > 0:
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+        i += 1
+    if depth != 0:
+        return None
+    # content excludes the outer braces
+    return text[start + 1 : i - 1], i
+
+
+_BRACKET_MACROS = {
+    "\\PB": ("\\left(", "\\right)"),
+    "\\RB": ("\\left[", "\\right]"),
+    "\\CB": ("\\left\\{", "\\right\\}"),
+}
+
+
+def _expand_all_bracket_macros(text: str) -> str:
+    r"""Expand all ``\PB``, ``\RB``, ``\CB`` macros in *text*, inside-out.
+
+    When an outer macro wraps inner macros (e.g. ``\PB{a \PB{b}}``) the
+    inner content is recursively expanded first, so the final result
+    contains no bracket macros regardless of nesting depth.
+    """
+    result: list[str] = []
+    i = 0
+    while i < len(text):
+        matched_macro = None
+        for macro in _BRACKET_MACROS:
+            if text[i:].startswith(macro + "{"):
+                matched_macro = macro
+                break
+        if matched_macro:
+            brace_start = i + len(matched_macro)
+            found = _find_brace_content(text, brace_start)
+            if found:
+                content, end = found
+                # Recursively expand any bracket macros inside the content
+                content = _expand_all_bracket_macros(content)
+                left, right = _BRACKET_MACROS[matched_macro]
+                result.append(f"{left} {content} {right}")
+                i = end
+                continue
+        result.append(text[i])
+        i += 1
+    return "".join(result)
+
+
 def expand_bracket_macros(text: str) -> str:
-    r"""Expand \PB{}, \RB{}, \CB{} bracket macros to standard LaTeX."""
-    text = re.sub(r"\\PB" + _BRACE_RE, r"\\left( \1 \\right)", text)
-    text = re.sub(r"\\RB" + _BRACE_RE, r"\\left[ \1 \\right]", text)
-    text = re.sub(r"\\CB" + _BRACE_RE, r"\\left\\{ \1 \\right\\}", text)
-    return text
+    r"""Expand \PB{}, \RB{}, \CB{} bracket macros to standard LaTeX.
+
+    Uses stack-based brace matching with recursion to handle arbitrary
+    nesting depth (e.g. ``\PB{\frac{\dot{m}_{a}}{\dot{m}_{b}}}``).
+    """
+    return _expand_all_bracket_macros(text)
 
 
 def convert_callout_env(text: str) -> str:
