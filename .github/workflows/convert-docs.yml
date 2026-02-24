@@ -45,7 +45,7 @@ jobs:
         id: set-matrix
         run: |
           if [ "${{ inputs.versions }}" = "all" ]; then
-            VERSIONS=$(python -c "from scripts.config import TARGET_VERSIONS; print(','.join(TARGET_VERSIONS))")
+            VERSIONS=$(uv run python -c "from scripts.config import TARGET_VERSIONS; print(','.join(TARGET_VERSIONS))")
           else
             VERSIONS="${{ inputs.versions }}"
           fi
@@ -92,7 +92,7 @@ jobs:
       - name: Compute short version
         id: short
         run: |
-          SHORT=$(python -c "from scripts.config import version_to_short; print(version_to_short('${{ matrix.version }}'))")
+          SHORT=$(uv run python -c "from scripts.config import version_to_short; print(version_to_short('${{ matrix.version }}'))")
           echo "version_short=${SHORT}" >> "$GITHUB_OUTPUT"
 
       - name: Clone EnergyPlus source (sparse, doc/ only)
@@ -108,7 +108,7 @@ jobs:
       - name: Convert docs
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
-          python -m scripts.convert \
+          uv run python -m scripts.convert \
             --source build/sources/${{ matrix.version }} \
             --output build/${{ steps.short.outputs.version_short }} \
             --version ${{ matrix.version }} \
@@ -149,7 +149,7 @@ jobs:
 
           # Generate versions.json and landing page
           VERSIONS="${{ needs.prepare.outputs.all_versions }}"
-          python -c "
+          uv run python -c "
           from scripts.version_manager import generate_versions_json, generate_root_landing
           from pathlib import Path
           versions = '${VERSIONS}'.split(',')
