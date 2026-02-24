@@ -156,23 +156,31 @@ def resolve_cross_references(text: str, label_index: dict[str, LabelRef]) -> str
 
 
 def clean_equation_labels(text: str) -> str:
-    r"""Convert equation labels to MathJax \tag{} format."""
+    r"""Remove equation labels from display math blocks.
 
-    # Pattern: equation with \label inside $$ blocks
-    def add_tag(m: re.Match) -> str:
-        eq_body = m.group(1)
-        label_match = re.search(r'<a id="([^"]+)"></a>', eq_body)
-        if label_match:
-            label = label_match.group(1)
-            # Remove the anchor from inside the equation
-            eq_body = re.sub(r'<a id="[^"]+"></a>\s*', "", eq_body)
-            # Add \tag at the end of the equation
-            eq_body = eq_body.rstrip()
-            if not eq_body.endswith(r"\tag"):
-                eq_body += f" \\tag{{{label}}}"
-        return f"$$\n{eq_body}\n$$"
+    Labels appear in two forms depending on how Pandoc processes them:
+    1. ``<a id="label"></a>`` — from the Lua filter's RawInline/RawBlock handler
+    2. ``\label{label}`` — when Pandoc passes display math content verbatim
 
-    return re.sub(r"\$\$\n(.*?)\n\$\$", add_tag, text, flags=re.DOTALL)
+    In both cases we strip the label.  The label is already emitted as an
+    ``<a id="...">`` anchor *before* the ``$$`` block (by the Lua filter's
+    RawBlock handler) or indexed in the label index, so keeping it inside
+    the math would only confuse MathJax.
+
+    Rather than trying to match full ``$$…$$`` blocks (which is fragile due
+    to adjacent inline-math creating false ``$$`` boundaries), we target
+    the specific patterns where labels appear:
+    - ``\label{…}$$`` — label immediately before a closing ``$$``
+    - ``<a id="…"></a>`` inside ``$$`` blocks (handled by Lua filter anchor)
+    """
+    # Strip \label{...} that appears before a closing $$ (with optional whitespace)
+    text = re.sub(r"\s*\\label\{[^}]+\}(\$\$)", r"\1", text)
+    # Strip \label{...} that appears after an opening $$ (on the same line)
+    text = re.sub(r"(\$\$)\\label\{[^}]+\}\s*", r"\1", text)
+    # Strip <a id="..."></a> anchors inside equation blocks
+    # These appear on a line between $$ markers
+    text = re.sub(r'(<a id="[^"]+"></a>)\s*\n\n\$\$', "\n$$", text)
+    return text
 
 
 def fix_heading_dashes(text: str) -> str:
@@ -192,12 +200,31 @@ def fix_heading_dashes(text: str) -> str:
     return re.sub(r"^(#{1,6})\s+(.+)$", replace_dashes, text, flags=re.MULTILINE)
 
 
+def clean_pandoc_ref_attributes(text: str) -> str:
+    r"""Clean Pandoc's ``\ref{}`` output artifacts.
+
+    Pandoc converts ``\ref{label}`` to
+    ``[\[label\]](#label){reference-type="ref" reference="label"}``.
+    This function:
+    1. Strips the ``{reference-type=... reference=...}`` attribute span.
+    2. Unescapes the bracket notation in link text: ``\[label\]`` → ``label``.
+    """
+    # Strip {reference-type="..." reference="..."} attribute spans
+    text = re.sub(r'\{reference-type="[^"]*"\s+reference="[^"]*"\}', "", text)
+    # Clean escaped brackets in link text: [\[label\]] → [label]
+    # Only inside markdown links to avoid false positives
+    text = re.sub(r"\[\\\[([^\]]*?)\\\]\]", r"[\1]", text)
+    return text
+
+
 def clean_pandoc_artifacts(text: str) -> str:
     """Remove Pandoc artifacts from the converted markdown."""
     # Remove {.unnumbered} from headings
     text = re.sub(r"\s*\{\.unnumbered\}", "", text)
     # Remove {#sec:...} attributes that Pandoc adds
     text = re.sub(r"\s*\{#[^}]+\}", "", text)
+    # Clean Pandoc \ref{} output (attribute spans and escaped brackets)
+    text = clean_pandoc_ref_attributes(text)
     # Fix escaped underscores in non-math contexts
     # (be careful not to break underscores in math mode)
     # Only fix double-escaped underscores
@@ -213,6 +240,9 @@ def clean_empty_links(text: str) -> str:
     """Remove empty links and fix malformed link syntax."""
     # Remove [](empty) links
     text = re.sub(r"\[\]\([^)]*\)", "", text)
+    # Clean empty bracket artifacts in image alt text: ![caption []]( → ![caption](
+    # Uses .*? to handle alt text that itself contains brackets (e.g. equation refs)
+    text = re.sub(r"(!\[.*?)\s*\[\](\]\()", r"\1\2", text)
     return text
 
 
