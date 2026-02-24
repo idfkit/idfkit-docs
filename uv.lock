@@ -73,6 +73,7 @@ name = "idfkit-docs"
 version = "0.0.1"
 source = { virtual = "." }
 dependencies = [
+    { name = "tomli", marker = "python_full_version < '3.11'" },
     { name = "tomli-w" },
 ]
 
@@ -86,7 +87,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "tomli-w", specifier = ">=1.0" }]
+requires-dist = [
+    { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2.0" },
+    { name = "tomli-w", specifier = ">=1.0" },
+]
 
 [package.metadata.requires-dev]
 dev = [
