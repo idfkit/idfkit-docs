@@ -5,6 +5,9 @@ description = "EnergyPlus documentation built with Zensical"
 authors = [{ name = "Samuel Letellier-Duchesne", email = "samuelduchesne@me.com" }]
 readme = "README.md"
 requires-python = ">=3.10,<4.0"
+dependencies = [
+    "tomli_w>=1.0",
+]
 
 [project.urls]
 Homepage = "https://docs.idfkit.com/"
