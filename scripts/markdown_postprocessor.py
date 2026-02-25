@@ -70,9 +70,14 @@ def fix_ordered_list_markers(text: str) -> str:
     return re.sub(r"^(\d+\.)\xa0", r"\1 ", text, flags=re.MULTILINE)
 
 
-def add_front_matter(text: str, title: str) -> str:
-    """Add YAML front matter with title."""
-    return f"---\ntitle: {title}\n---\n\n{text}"
+def add_front_matter(text: str, title: str, doc_set_title: str = "") -> str:
+    """Add YAML front matter with title and tags."""
+    lines = ["---", f"title: {title}"]
+    if doc_set_title:
+        lines.append("tags:")
+        lines.append(f"  - {doc_set_title}")
+    lines.append("---")
+    return "\n".join(lines) + "\n\n" + text
 
 
 def extract_title(text: str) -> str:
@@ -264,6 +269,7 @@ def postprocess(
     text: str,
     title: str | None = None,
     doc_set_slug: str = "",
+    doc_set_title: str = "",
     label_index: dict[str, LabelRef] | None = None,
     rel_depth: int = 0,
 ) -> str:
@@ -285,6 +291,6 @@ def postprocess(
     text = fix_heading_dashes(text)
     text = clean_empty_links(text)
     text = clean_div_wrappers(text)
-    text = add_front_matter(text, title)
+    text = add_front_matter(text, title, doc_set_title=doc_set_title)
 
     return text

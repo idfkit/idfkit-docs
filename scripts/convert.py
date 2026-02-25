@@ -131,6 +131,7 @@ def convert_tex_file(
     doc_set_slug: str,
     label_index: dict[str, LabelRef],
     rel_depth: int = 0,
+    doc_set_title: str = "",
 ) -> ConversionResult:
     """Convert a single .tex file to Markdown via preprocessing -> Pandoc -> postprocessing."""
     warnings: list[str] = []
@@ -194,6 +195,7 @@ def convert_tex_file(
         md_text = postprocess(
             md_text,
             doc_set_slug=doc_set_slug,
+            doc_set_title=doc_set_title,
             label_index=label_index,
             rel_depth=rel_depth,
         )
@@ -231,7 +233,7 @@ def generate_doc_set_index(doc_set: DocSet, output_dir: Path, first_page: str) -
     """Generate an index.md for a doc set section so browsing the section URL works."""
     index_path = output_dir / "docs" / doc_set.slug / "index.md"
     index_path.parent.mkdir(parents=True, exist_ok=True)
-    index_path.write_text(f"---\ntitle: {doc_set.title}\n---\n\n# {doc_set.title}\n")
+    index_path.write_text(f"---\ntitle: {doc_set.title}\ntags:\n  - {doc_set.title}\n---\n\n# {doc_set.title}\n")
 
 
 def _append_child_toc(
@@ -322,7 +324,9 @@ def convert_doc_set(
         # Compute output path and depth within doc set
         output_path, rel_depth = _output_path_for_input(inp, doc_set.slug, output_dir, is_parent=inp in parent_children)
 
-        file_result = convert_tex_file(tex_path, output_path, doc_set.slug, label_index, rel_depth=rel_depth)
+        file_result = convert_tex_file(
+            tex_path, output_path, doc_set.slug, label_index, rel_depth=rel_depth, doc_set_title=doc_set.title
+        )
         result.file_results.append(file_result)
 
         if not file_result.success:
@@ -409,6 +413,9 @@ def generate_zensical_config(
     # Version provider for mike
     extra = project.setdefault("extra", {})
     extra["version"] = {"provider": "mike", "default": "stable"}
+
+    # Tags for cmd-k search filtering
+    extra["tags"] = {ds.title: ds.slug for ds in doc_sets}
 
     # MathJax
     project["extra_javascript"] = [
