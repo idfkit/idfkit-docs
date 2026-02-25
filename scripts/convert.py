@@ -12,10 +12,12 @@ from __future__ import annotations
 import argparse
 import copy
 import logging
+import os
 import re
 import shutil
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import tomli_w
@@ -287,57 +289,101 @@ def _output_path_for_input(inp: str, doc_set_slug: str, output_dir: Path, is_par
     return output_dir / "docs" / doc_set_slug / f"{md_rel}.md", md_rel.count("/")
 
 
-def convert_doc_set(
+def _convert_files(
+    tasks: list[tuple[str, Path, Path, int]],
+    doc_set_slug: str,
+    doc_set_title: str,
+    label_index: dict[str, LabelRef],
+    max_workers: int,
+) -> list[tuple[str, ConversionResult]]:
+    """Run file conversions, using a thread pool when *max_workers* > 1."""
+    converted: list[tuple[str, ConversionResult]] = []
+    if max_workers > 1 and len(tasks) > 1:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_inp = {
+                executor.submit(
+                    convert_tex_file,
+                    tex_path,
+                    output_path,
+                    doc_set_slug,
+                    label_index,
+                    rel_depth,
+                    doc_set_title,
+                ): inp
+                for inp, tex_path, output_path, rel_depth in tasks
+            }
+            for future in as_completed(future_to_inp):
+                inp = future_to_inp[future]
+                converted.append((inp, future.result()))
+    else:
+        for inp, tex_path, output_path, rel_depth in tasks:
+            converted.append((
+                inp,
+                convert_tex_file(
+                    tex_path, output_path, doc_set_slug, label_index, rel_depth=rel_depth, doc_set_title=doc_set_title
+                ),
+            ))
+    return converted
+
+
+def _collect_tasks(
+    inputs: list[str],
     doc_set: DocSet,
     output_dir: Path,
-    label_index: dict[str, LabelRef],
-) -> DocSetResult:
-    """Convert all files in a doc set."""
-    result = DocSetResult(doc_set=doc_set)
-
-    # Copy media files
-    copy_media(doc_set, output_dir / "docs")
-
-    # Parse input chain recursively to discover all files
-    inputs = parse_input_chain(doc_set.main_tex)
-
-    # Build map of parent -> children for TOC generation
-    parent_children = _build_parent_children_map(inputs)
-
+    parent_children: dict[str, list[str]],
+    result: DocSetResult,
+) -> list[tuple[str, Path, Path, int]]:
+    """Build the list of conversion tasks from the input chain, recording missing-file errors."""
+    tasks: list[tuple[str, Path, Path, int]] = []
     for inp in inputs:
-        # Skip title
         if inp == "src/title" or inp.endswith("/title"):
             continue
-
         tex_path = doc_set.source_dir / f"{inp}.tex"
         if not tex_path.exists():
             result.file_results.append(
                 ConversionResult(
-                    source=tex_path,
-                    output=Path(),
-                    success=False,
-                    error=f"Source file not found: {tex_path}",
+                    source=tex_path, output=Path(), success=False, error=f"Source file not found: {tex_path}"
                 )
             )
             continue
-
-        # Compute output path and depth within doc set
         output_path, rel_depth = _output_path_for_input(inp, doc_set.slug, output_dir, is_parent=inp in parent_children)
+        tasks.append((inp, tex_path, output_path, rel_depth))
+    return tasks
 
-        file_result = convert_tex_file(
-            tex_path, output_path, doc_set.slug, label_index, rel_depth=rel_depth, doc_set_title=doc_set.title
-        )
+
+def convert_doc_set(
+    doc_set: DocSet,
+    output_dir: Path,
+    label_index: dict[str, LabelRef],
+    *,
+    max_workers: int = 1,
+) -> DocSetResult:
+    """Convert all files in a doc set.
+
+    When *max_workers* > 1, file conversions are executed in parallel
+    using a :class:`~concurrent.futures.ThreadPoolExecutor`.  The Pandoc
+    subprocess calls are I/O-bound, so threads work well here.
+    """
+    result = DocSetResult(doc_set=doc_set)
+    copy_media(doc_set, output_dir / "docs")
+
+    inputs = parse_input_chain(doc_set.main_tex)
+    parent_children = _build_parent_children_map(inputs)
+    tasks = _collect_tasks(inputs, doc_set, output_dir, parent_children, result)
+
+    # Phase 1: Convert files (parallel when max_workers > 1)
+    converted = _convert_files(tasks, doc_set.slug, doc_set.title, label_index, max_workers)
+
+    # Phase 2: Log results and append TOCs (must happen after files are written)
+    for inp, file_result in converted:
         result.file_results.append(file_result)
-
         if not file_result.success:
-            logger.warning("Failed to convert %s: %s", tex_path, file_result.error)
+            logger.warning("Failed to convert %s: %s", file_result.source, file_result.error)
         elif file_result.warnings:
             for w in file_result.warnings:
-                logger.debug("Warning for %s: %s", tex_path, w)
-
-        # For parent pages, append a table of contents linking to children
+                logger.debug("Warning for %s: %s", file_result.source, w)
         if file_result.success and inp in parent_children:
-            _append_child_toc(output_path, parent_children[inp], doc_set)
+            _append_child_toc(file_result.output, parent_children[inp], doc_set)
 
     # Generate section index page
     first_page = ""
@@ -452,6 +498,7 @@ def convert_version(
     version: str,
     *,
     skip_build: bool = False,
+    max_workers: int = 1,
 ) -> VersionResult:
     """Convert all doc sets for a single EnergyPlus version.
 
@@ -460,6 +507,7 @@ def convert_version(
         output_dir: Path to write the build output
         version: Version tag (e.g., "v25.2.0")
         skip_build: If True, skip the zensical build step
+        max_workers: Maximum parallel file conversions (1 = sequential)
 
     Returns:
         VersionResult with conversion and build status
@@ -480,7 +528,7 @@ def convert_version(
     # Convert each doc set
     for ds in doc_sets:
         logger.info("Converting doc set: %s", ds.title)
-        ds_result = convert_doc_set(ds, output_dir, label_index)
+        ds_result = convert_doc_set(ds, output_dir, label_index, max_workers=max_workers)
         result.doc_set_results.append(ds_result)
         logger.info(
             "  %s: %d/%d files converted",
@@ -525,6 +573,12 @@ def main() -> None:
     parser.add_argument("--output", required=True, type=Path, help="Output build directory")
     parser.add_argument("--version", required=True, help="Version tag (e.g., v25.2.0)")
     parser.add_argument("--skip-build", action="store_true", help="Skip the zensical build step")
+    parser.add_argument(
+        "--max-workers",
+        type=int,
+        default=os.cpu_count() or 4,
+        help="Maximum parallel file conversions (default: CPU count)",
+    )
     parser.add_argument("--verbose", "-v", action="store_true", help="Enable verbose logging")
 
     args = parser.parse_args()
@@ -534,7 +588,9 @@ def main() -> None:
         format="%(levelname)s: %(message)s",
     )
 
-    result = convert_version(args.source, args.output, args.version, skip_build=args.skip_build)
+    result = convert_version(
+        args.source, args.output, args.version, skip_build=args.skip_build, max_workers=args.max_workers
+    )
 
     # Print summary
     print(f"\n{'=' * 60}")
