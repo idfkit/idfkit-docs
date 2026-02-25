@@ -38,8 +38,8 @@ serve: ## Serve the full multi-version site from dist/
 	@if [ ! -d dist ] || [ ! -f dist/index.html ]; then \
 		echo "No dist/ found. Run 'make convert VERSION=v25.2.0' first."; exit 1; \
 	fi
-	@echo "Serving full site from dist/ on http://localhost:8000"
-	@python -m http.server 8000 --directory dist
+	@echo "Serving full site from dist/ on http://localhost:8003"
+	@uv run python -m http.server 8003 --directory dist
 
 .PHONY: convert
 convert: ## Convert a single EnergyPlus version (usage: make convert VERSION=v25.2.0)

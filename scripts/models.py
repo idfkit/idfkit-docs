@@ -51,6 +51,9 @@ class LabelRef:
     label: str
     output_path: str
     heading_anchor: str = ""
+    label_type: str = ""  # "equation" | "" (for future: "figure", "table")
+    equation_latex: str = ""  # Raw LaTeX content (for tooltip data-equation attribute)
+    equation_number: int = 0  # MathJax AMS equation number on the target page (1-based)
 
 
 @dataclass

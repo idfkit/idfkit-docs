@@ -372,9 +372,26 @@ def fix_unbalanced_braces(text: str, *, source_hint: str = "") -> str:
     return "".join(ch for i, ch in enumerate(text) if i not in to_remove)
 
 
+def isolate_display_math_envs(text: str) -> str:
+    r"""Insert blank lines around display math environments.
+
+    Pandoc needs blank lines around ``\begin{equation}``, ``\begin{align}``,
+    etc. to parse them as standalone blocks rather than inline content within
+    a paragraph.  Without this, Pandoc may merge the equation into the
+    preceding paragraph and emit inline ``$...$`` instead of display ``$$...$$``.
+    """
+    envs = r"equation|equation\*|align|align\*|gather|gather\*|multline|multline\*|eqnarray|eqnarray\*"
+    # Ensure a blank line before \begin{env}
+    text = re.sub(rf"(?<!\n\n)(\\begin{{({envs})}})", r"\n\n\1", text)
+    # Ensure a blank line after \end{env}
+    text = re.sub(rf"(\\end{{({envs})}})(?!\n\n)", r"\1\n\n", text)
+    return text
+
+
 def preprocess(text: str, *, source_hint: str = "") -> str:
     """Apply all preprocessing transformations in the correct order."""
     text = strip_document_wrapper(text)
+    text = isolate_display_math_envs(text)
     text = strip_input_directives(text)
     text = strip_longtable_continuations(text)
     text = expand_si_macros(text)

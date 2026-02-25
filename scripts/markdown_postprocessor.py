@@ -6,7 +6,7 @@ Handles:
 - Admonition formatting for Zensical (4-space indent)
 - Image path rewriting relative to output file location
 - Cross-reference resolution via label index
-- Equation label conversion to MathJax-compatible format
+- Equation reference resolution (same-page eqref / cross-page tooltip links)
 - YAML front matter generation
 - Pandoc artifact cleanup
 - Typographic dash conversion in headings
@@ -14,6 +14,8 @@ Handles:
 
 from __future__ import annotations
 
+import html
+import posixpath
 import re
 
 from scripts.models import LabelRef
@@ -84,7 +86,10 @@ def extract_title(text: str) -> str:
     """Extract the title from the first heading in the markdown."""
     m = re.search(r"^#\s+(.+)$", text, re.MULTILINE)
     if m:
-        return m.group(1).strip()
+        title = m.group(1).strip()
+        # Strip Pandoc attributes like {#overview-022} and {.unnumbered}
+        title = re.sub(r"\s*\{[#.][^}]*\}", "", title).strip()
+        return title
     return "Untitled"
 
 
@@ -144,48 +149,127 @@ def rewrite_image_paths(text: str, doc_set_slug: str, rel_depth: int = 0) -> str
     return re.sub(r"!\[((?:[^\[\]]|\[(?:[^\[\]]|\[[^\]]*\])*\])*)\]\(([^)]+)\)", rewrite, text)
 
 
-def resolve_cross_references(text: str, label_index: dict[str, LabelRef]) -> str:
-    """Resolve #crossref:label links using the label index."""
+def resolve_cross_references(text: str, label_index: dict[str, LabelRef], current_md_path: str = "") -> str:
+    """Resolve #crossref:label links using the label index.
+
+    For equation-type labels, same-page references become ``$\\eqref{label}$``
+    so MathJax renders a clickable numbered reference.  Cross-page equation
+    references become ``<a class="eq-ref" ...>`` with the equation LaTeX in a
+    data attribute for tooltip rendering.
+
+    Args:
+        text: Markdown content with ``#crossref:label`` links.
+        label_index: Map of label names to their output paths.
+        current_md_path: The current page's markdown path relative to the docs
+            root (e.g. ``engineering-reference/overview/basics.md``).  Used to
+            compute correct relative links.
+    """
+    # Directory of the current page (relative to docs root)
+    current_dir = posixpath.dirname(current_md_path) if current_md_path else ""
 
     def resolve(m: re.Match) -> str:
         link_text = m.group(1)
         label = m.group(2)
         if label in label_index:
             ref = label_index[label]
+
+            # Equation-type labels get special handling
+            if ref.label_type == "equation":
+                if ref.output_path == current_md_path:
+                    # Same-page: MathJax renders the clickable number
+                    return f"$\\eqref{{{label}}}$"
+                # Cross-page: tooltip link with pre-computed equation number
+                target_url = _relative_url(ref.output_path, current_md_path)
+                anchor = _label_to_mjx_anchor(label)
+                escaped_latex = html.escape(ref.equation_latex) if ref.equation_latex else ""
+                eq_text = str(ref.equation_number) if ref.equation_number else "#"
+                return f'<a href="{target_url}#{anchor}" class="eq-ref" data-equation="{escaped_latex}">{eq_text}</a>'
+
             anchor = f"#{ref.heading_anchor}" if ref.heading_anchor else ""
-            return f"[{link_text}]({ref.output_path}{anchor})"
+            target_path = ref.output_path
+            if current_dir:
+                target_path = posixpath.relpath(target_path, current_dir)
+            return f"[{link_text}]({target_path}{anchor})"
         # Unresolved reference - keep as-is with a note
         return f"[{link_text}](#{label})"
 
     return re.sub(r"\[([^\]]*)\]\(#crossref:([^)]+)\)", resolve, text)
 
 
-def clean_equation_labels(text: str) -> str:
-    r"""Remove equation labels from display math blocks.
+def _label_to_mjx_anchor(label: str) -> str:
+    """Convert a LaTeX label to MathJax's element ID format for use in hrefs.
 
-    Labels appear in two forms depending on how Pandoc processes them:
-    1. ``<a id="label"></a>`` — from the Lua filter's RawInline/RawBlock handler
-    2. ``\label{label}`` — when Pandoc passes display math content verbatim
-
-    In both cases we strip the label.  The label is already emitted as an
-    ``<a id="...">`` anchor *before* the ``$$`` block (by the Lua filter's
-    RawBlock handler) or indexed in the label index, so keeping it inside
-    the math would only confuse MathJax.
-
-    Rather than trying to match full ``$$…$$`` blocks (which is fragile due
-    to adjacent inline-math creating false ``$$`` boundaries), we target
-    the specific patterns where labels appear:
-    - ``\label{…}$$`` — label immediately before a closing ``$$``
-    - ``<a id="…"></a>`` inside ``$$`` blocks (handled by Lua filter anchor)
+    MathJax 3 creates element IDs as ``mjx-eqn-<label>`` (dash prefix) with
+    literal special characters (e.g. colons).  For ``href`` attributes, colons
+    in the label portion must be percent-encoded so the browser decodes them
+    back to match the element ID.
     """
-    # Strip \label{...} that appears before a closing $$ (with optional whitespace)
-    text = re.sub(r"\s*\\label\{[^}]+\}(\$\$)", r"\1", text)
-    # Strip \label{...} that appears after an opening $$ (on the same line)
-    text = re.sub(r"(\$\$)\\label\{[^}]+\}\s*", r"\1", text)
-    # Strip <a id="..."></a> anchors inside equation blocks
-    # These appear on a line between $$ markers
-    text = re.sub(r'(<a id="[^"]+"></a>)\s*\n\n\$\$', "\n$$", text)
-    return text
+    encoded = label.replace(":", "%3A")
+    return f"mjx-eqn-{encoded}"
+
+
+def _relative_url(target_md_path: str, current_md_path: str) -> str:
+    """Compute a relative URL between two ``.md`` paths for raw HTML ``<a>`` hrefs.
+
+    Zensical uses directory-style URLs: ``foo/bar.md`` is served as
+    ``foo/bar/``.  This means the browser resolves relative links from
+    ``foo/bar/``, one level deeper than the file's directory.  Markdown
+    links are rewritten by Zensical automatically, but raw ``<a>`` tags
+    must account for the extra directory level.
+    """
+
+    def _to_url_dir(md_path: str) -> str:
+        """Convert a ``.md`` path to its URL-level directory."""
+        if md_path.endswith("/index.md"):
+            return md_path[: -len("/index.md")]
+        if md_path.endswith(".md"):
+            return md_path[: -len(".md")]
+        return md_path
+
+    current_dir = _to_url_dir(current_md_path)
+    target_dir = _to_url_dir(target_md_path)
+    return posixpath.relpath(target_dir, current_dir) + "/"
+
+
+def resolve_equation_references(
+    text: str,
+    label_index: dict[str, LabelRef],
+    current_md_path: str = "",
+) -> str:
+    r"""Resolve ``<span class="eqref-placeholder">`` markers emitted by the Lua filter.
+
+    Same-page references become ``$\eqref{label}$`` so MathJax renders a
+    clickable numbered link.  Cross-page references become
+    ``<a class="eq-ref" ...>Eq.</a>`` with the equation LaTeX in a data
+    attribute for tooltip rendering.
+    """
+    current_dir = posixpath.dirname(current_md_path) if current_md_path else ""
+
+    def resolve(m: re.Match) -> str:
+        label = m.group(1)
+        ref = label_index.get(label)
+
+        if ref and ref.label_type == "equation":
+            if ref.output_path == current_md_path:
+                return f"$\\eqref{{{label}}}$"
+            # Cross-page equation reference with tooltip
+            target_url = _relative_url(ref.output_path, current_md_path)
+            anchor = _label_to_mjx_anchor(label)
+            escaped_latex = html.escape(ref.equation_latex) if ref.equation_latex else ""
+            eq_num = str(ref.equation_number) if ref.equation_number else "?"
+            return f'<a href="{target_url}#{anchor}" class="eq-ref" data-equation="{escaped_latex}">({eq_num})</a>'
+
+        # Not in index or not an equation — fall back to a crossref link
+        if ref:
+            target_path = ref.output_path
+            if current_dir:
+                target_path = posixpath.relpath(target_path, current_dir)
+            return f"[Eq.]({target_path})"
+
+        # Unresolved — emit inline eqref and hope MathJax can resolve it
+        return f"$\\eqref{{{label}}}$"
+
+    return re.sub(r'<span class="eqref-placeholder" data-label="([^"]+)"></span>', resolve, text)
 
 
 def fix_heading_dashes(text: str) -> str:
@@ -272,6 +356,7 @@ def postprocess(
     doc_set_title: str = "",
     label_index: dict[str, LabelRef] | None = None,
     rel_depth: int = 0,
+    current_md_path: str = "",
 ) -> str:
     """Apply all postprocessing transformations in the correct order."""
     if label_index is None:
@@ -285,8 +370,8 @@ def postprocess(
     text = fix_ordered_list_markers(text)
     text = fix_admonition_indent(text)
     text = rewrite_image_paths(text, doc_set_slug, rel_depth=rel_depth)
-    text = resolve_cross_references(text, label_index)
-    text = clean_equation_labels(text)
+    text = resolve_equation_references(text, label_index, current_md_path=current_md_path)
+    text = resolve_cross_references(text, label_index, current_md_path=current_md_path)
     text = clean_pandoc_artifacts(text)
     text = fix_heading_dashes(text)
     text = clean_empty_links(text)

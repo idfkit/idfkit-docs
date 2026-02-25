@@ -42,6 +42,7 @@ logger = logging.getLogger(__name__)
 
 ROOT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "zensical.toml"
 FILTER_PATH = Path(__file__).parent / "pandoc_filters" / "energyplus.lua"
+ASSETS_DIR = Path(__file__).parent / "assets"
 
 
 def discover_doc_sets(source_dir: Path) -> list[DocSet]:
@@ -86,8 +87,79 @@ def discover_doc_sets(source_dir: Path) -> list[DocSet]:
     return doc_sets
 
 
+def _clean_equation_latex(latex: str) -> str:
+    r"""Strip TeX spacing preamble that MathJax doesn't understand.
+
+    Some EnergyPlus equations contain spacing overrides like
+    ``\medmuskip=0mu \thinmuskip=0mu`` that render as red error text
+    in MathJax tooltips.
+    """
+    # Remove \command=<value><unit> assignments (e.g. \medmuskip=0mu, \scriptspace=0pt)
+    latex = re.sub(r"\\[a-zA-Z]+=\d+[a-z]+\s*", "", latex)
+    return latex.strip()
+
+
+def _collect_numbered_math(text: str) -> list[tuple[int, str, str]]:
+    r"""Collect all display math environments from LaTeX source in document order.
+
+    After the Lua filter, ALL display equations (including ``equation*`` and
+    ``\[...\]``) are wrapped in ``\begin{equation}...\end{equation}``, so
+    MathJax numbers them all.  Non-starred ``\begin{align}`` rows are also
+    numbered.  Starred ``align*`` is preserved unnumbered.
+
+    Returns a list of ``(position, kind, body)`` tuples sorted by position.
+    """
+    items: list[tuple[int, str, str]] = []
+
+    for m in re.finditer(r"\\begin\{equation\*?\}(.*?)\\end\{equation\*?\}", text, re.DOTALL):
+        items.append((m.start(), "equation", m.group(1)))
+
+    for m in re.finditer(r"\\begin\{align\}(.*?)\\end\{align\}", text, re.DOTALL):
+        items.append((m.start(), "align", m.group(1)))
+
+    for m in re.finditer(r"\\\[(.*?)\\\]", text, re.DOTALL):
+        items.append((m.start(), "equation", m.group(1)))
+
+    items.sort(key=lambda x: x[0])
+    return items
+
+
+def _compute_equation_numbers(text: str) -> dict[str, tuple[str, int]]:
+    r"""Compute per-page MathJax AMS equation numbers for labeled equations.
+
+    Returns a dict mapping label → (equation_body, equation_number).
+    """
+    result: dict[str, tuple[str, int]] = {}
+    counter = 0
+
+    for _pos, kind, body in _collect_numbered_math(text):
+        clean_body = _clean_equation_latex(re.sub(r"\s*\\label\{[^}]+\}", "", body).strip())
+
+        if kind == "equation":
+            counter += 1
+            label_m = re.search(r"\\label\{([^}]+)\}", body)
+            if label_m:
+                result[label_m.group(1)] = (clean_body, counter)
+
+        elif kind == "align":
+            for row in re.split(r"\\\\", body):
+                has_nonumber = r"\nonumber" in row or r"\notag" in row
+                if not has_nonumber:
+                    counter += 1
+                label_m = re.search(r"\\label\{([^}]+)\}", row)
+                if label_m and not has_nonumber:
+                    result[label_m.group(1)] = (clean_body, counter)
+
+    return result
+
+
 def build_label_index(source_dir: Path, doc_sets: list[DocSet]) -> dict[str, LabelRef]:
-    r"""Scan all .tex files for \label{} and map to output markdown paths."""
+    r"""Scan all .tex files for \label{} and map to output markdown paths.
+
+    For labels inside equation/align environments, stores the equation body,
+    sets ``label_type="equation"``, and pre-computes the MathJax AMS equation
+    number so cross-page references can display the correct number.
+    """
     label_index: dict[str, LabelRef] = {}
 
     for ds in doc_sets:
@@ -105,9 +177,23 @@ def build_label_index(source_dir: Path, doc_sets: list[DocSet]) -> dict[str, Lab
             md_rel = inp[4:] if inp.startswith("src/") else inp
             md_path = f"{ds.slug}/{md_rel}.md"
 
+            # Compute equation numbers for this page
+            eq_info = _compute_equation_numbers(text)
+
+            # Register all labels
             for m in re.finditer(r"\\label\{([^}]+)\}", text):
                 label = m.group(1)
-                label_index[label] = LabelRef(label=label, output_path=md_path)
+                if label in eq_info:
+                    eq_body, eq_num = eq_info[label]
+                    label_index[label] = LabelRef(
+                        label=label,
+                        output_path=md_path,
+                        label_type="equation",
+                        equation_latex=eq_body,
+                        equation_number=eq_num,
+                    )
+                else:
+                    label_index[label] = LabelRef(label=label, output_path=md_path)
 
     logger.info("Built label index with %d entries", len(label_index))
     return label_index
@@ -134,6 +220,7 @@ def convert_tex_file(
     label_index: dict[str, LabelRef],
     rel_depth: int = 0,
     doc_set_title: str = "",
+    current_md_path: str = "",
 ) -> ConversionResult:
     """Convert a single .tex file to Markdown via preprocessing -> Pandoc -> postprocessing."""
     warnings: list[str] = []
@@ -200,6 +287,7 @@ def convert_tex_file(
             doc_set_title=doc_set_title,
             label_index=label_index,
             rel_depth=rel_depth,
+            current_md_path=current_md_path,
         )
 
         # Write output
@@ -279,18 +367,20 @@ def _build_parent_children_map(inputs: list[str]) -> dict[str, list[str]]:
     return parent_children
 
 
-def _output_path_for_input(inp: str, doc_set_slug: str, output_dir: Path, is_parent: bool) -> tuple[Path, int]:
-    """Compute the output .md path and rel_depth for an input entry."""
+def _output_path_for_input(inp: str, doc_set_slug: str, output_dir: Path, is_parent: bool) -> tuple[Path, int, str]:
+    """Compute the output .md path, rel_depth, and md_path relative to docs root."""
     md_rel = inp[4:] if inp.startswith("src/") else inp
     if is_parent:
         # Parent pages become index.md inside their chapter folder
         # so navigation.indexes makes the section header clickable.
-        return output_dir / "docs" / doc_set_slug / md_rel / "index.md", md_rel.count("/") + 1
-    return output_dir / "docs" / doc_set_slug / f"{md_rel}.md", md_rel.count("/")
+        md_path = f"{doc_set_slug}/{md_rel}/index.md"
+        return output_dir / "docs" / doc_set_slug / md_rel / "index.md", md_rel.count("/") + 1, md_path
+    md_path = f"{doc_set_slug}/{md_rel}.md"
+    return output_dir / "docs" / doc_set_slug / f"{md_rel}.md", md_rel.count("/"), md_path
 
 
 def _convert_files(
-    tasks: list[tuple[str, Path, Path, int]],
+    tasks: list[tuple[str, Path, Path, int, str]],
     doc_set_slug: str,
     doc_set_title: str,
     label_index: dict[str, LabelRef],
@@ -309,18 +399,25 @@ def _convert_files(
                     label_index,
                     rel_depth,
                     doc_set_title,
+                    current_md_path,
                 ): inp
-                for inp, tex_path, output_path, rel_depth in tasks
+                for inp, tex_path, output_path, rel_depth, current_md_path in tasks
             }
             for future in as_completed(future_to_inp):
                 inp = future_to_inp[future]
                 converted.append((inp, future.result()))
     else:
-        for inp, tex_path, output_path, rel_depth in tasks:
+        for inp, tex_path, output_path, rel_depth, current_md_path in tasks:
             converted.append((
                 inp,
                 convert_tex_file(
-                    tex_path, output_path, doc_set_slug, label_index, rel_depth=rel_depth, doc_set_title=doc_set_title
+                    tex_path,
+                    output_path,
+                    doc_set_slug,
+                    label_index,
+                    rel_depth=rel_depth,
+                    doc_set_title=doc_set_title,
+                    current_md_path=current_md_path,
                 ),
             ))
     return converted
@@ -332,9 +429,9 @@ def _collect_tasks(
     output_dir: Path,
     parent_children: dict[str, list[str]],
     result: DocSetResult,
-) -> list[tuple[str, Path, Path, int]]:
+) -> list[tuple[str, Path, Path, int, str]]:
     """Build the list of conversion tasks from the input chain, recording missing-file errors."""
-    tasks: list[tuple[str, Path, Path, int]] = []
+    tasks: list[tuple[str, Path, Path, int, str]] = []
     for inp in inputs:
         if inp == "src/title" or inp.endswith("/title"):
             continue
@@ -346,8 +443,10 @@ def _collect_tasks(
                 )
             )
             continue
-        output_path, rel_depth = _output_path_for_input(inp, doc_set.slug, output_dir, is_parent=inp in parent_children)
-        tasks.append((inp, tex_path, output_path, rel_depth))
+        output_path, rel_depth, current_md_path = _output_path_for_input(
+            inp, doc_set.slug, output_dir, is_parent=inp in parent_children
+        )
+        tasks.append((inp, tex_path, output_path, rel_depth, current_md_path))
     return tasks
 
 
@@ -463,13 +562,27 @@ def generate_zensical_config(
     # Tags for cmd-k search filtering
     extra["tags"] = {ds.title: ds.slug for ds in doc_sets}
 
-    # MathJax
+    # MathJax with equation numbering + equation tooltips
     project["extra_javascript"] = [
+        {"path": "assets/mathjax-config.js"},
         {"path": "https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js", "async": True},
+        {"path": "assets/eq-tooltips.js"},
     ]
+    project["extra_css"] = ["assets/eq-tooltips.css"]
 
     config_path = output_dir / "zensical.toml"
     config_path.write_text(tomli_w.dumps(config))
+
+
+def copy_assets(output_dir: Path) -> None:
+    """Copy static JS/CSS assets into the build output's docs/assets/ directory."""
+    if not ASSETS_DIR.exists():
+        return
+    dst = output_dir / "docs" / "assets"
+    dst.mkdir(parents=True, exist_ok=True)
+    for f in ASSETS_DIR.iterdir():
+        if f.is_file():
+            shutil.copy2(f, dst / f.name)
 
 
 def build_site(output_dir: Path) -> tuple[bool, str]:
@@ -542,6 +655,9 @@ def convert_version(
 
     # Generate zensical config
     generate_zensical_config(version, doc_sets, output_dir)
+
+    # Copy static assets (MathJax config, equation tooltips)
+    copy_assets(output_dir)
 
     # Build site
     if not skip_build:
