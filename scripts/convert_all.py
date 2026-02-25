@@ -117,8 +117,8 @@ def main() -> None:
     parser.add_argument(
         "--file-workers",
         type=int,
-        default=os.cpu_count() or 4,
-        help="Parallel file conversions per version (default: CPU count)",
+        default=1,
+        help="Parallel file conversions per version (default: 1, to avoid oversubscription with --max-workers)",
     )
     parser.add_argument("--force-rebuild", action="store_true", help="Force rebuild even if cached")
     parser.add_argument("--skip-build", action="store_true", help="Skip zensical build step")
