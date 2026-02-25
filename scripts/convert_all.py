@@ -80,7 +80,9 @@ def clone_version(version: str, clone_dir: Path) -> Path:
     return target
 
 
-def process_version(version: str, *, force_rebuild: bool = False, skip_build: bool = False) -> VersionResult:
+def process_version(
+    version: str, *, force_rebuild: bool = False, skip_build: bool = False, file_workers: int = 1
+) -> VersionResult:
     """Clone and convert a single version. Designed to run in a worker process."""
     short = version_to_short(version)
     output_dir = BUILD_DIR / short
@@ -94,7 +96,7 @@ def process_version(version: str, *, force_rebuild: bool = False, skip_build: bo
     source_dir = clone_version(version, CLONE_DIR)
 
     # Convert
-    return convert_version(source_dir, output_dir, version, skip_build=skip_build)
+    return convert_version(source_dir, output_dir, version, skip_build=skip_build, max_workers=file_workers)
 
 
 def main() -> None:
@@ -111,6 +113,12 @@ def main() -> None:
         type=int,
         default=os.cpu_count() or 4,
         help="Maximum parallel workers (default: CPU count)",
+    )
+    parser.add_argument(
+        "--file-workers",
+        type=int,
+        default=1,
+        help="Parallel file conversions per version (default: 1, to avoid oversubscription with --max-workers)",
     )
     parser.add_argument("--force-rebuild", action="store_true", help="Force rebuild even if cached")
     parser.add_argument("--skip-build", action="store_true", help="Skip zensical build step")
@@ -136,6 +144,7 @@ def main() -> None:
                 v,
                 force_rebuild=args.force_rebuild,
                 skip_build=args.skip_build,
+                file_workers=args.file_workers,
             ): v
             for v in versions
         }

@@ -57,7 +57,8 @@ convert: ## Convert a single EnergyPlus version (usage: make convert VERSION=v25
 	@uv run python -m scripts.convert \
 		--source build/sources/$(VERSION) \
 		--output build/$$(uv run python -c "from scripts.config import version_to_short; print(version_to_short('$(VERSION)'))") \
-		--version $(VERSION) --verbose
+		--version $(VERSION) --verbose \
+		$(if $(MAX_WORKERS),--max-workers $(MAX_WORKERS),)
 	@$(MAKE) deploy VERSION=$(VERSION)
 
 .PHONY: deploy
