@@ -188,12 +188,13 @@ def build_label_index(source_dir: Path, doc_sets: list[DocSet]) -> dict[str, Lab
                     label_index[label] = LabelRef(
                         label=label,
                         output_path=md_path,
+                        heading_anchor=label,
                         label_type="equation",
                         equation_latex=eq_body,
                         equation_number=eq_num,
                     )
                 else:
-                    label_index[label] = LabelRef(label=label, output_path=md_path)
+                    label_index[label] = LabelRef(label=label, output_path=md_path, heading_anchor=label)
 
     logger.info("Built label index with %d entries", len(label_index))
     return label_index

@@ -5,8 +5,12 @@
 -- 2. CodeBlock -> fenced code blocks with language class
 -- 3. BlockQuote -> admonition conversion (from callout environment)
 -- 4. Image path resolution (media/ relative references)
--- 5. Cross-reference handling via label index
--- 6. Definition list formatting for wherelist remnants
+-- 5. Figure -> caption preservation and label anchors
+-- 6. Link -> intercept Pandoc's \ref{}/\eqref{} for cross-reference resolution
+-- 7. Math -> fix \textsubscript/\textsuperscript in math mode
+-- 8. Para -> split DisplayMath into standalone blocks with equation numbering
+-- 9. Cross-reference handling via label index
+-- 10. Definition list formatting for wherelist remnants
 
 -- Convert Table elements to pipe-table markdown for proper rendering.
 -- Pandoc's default simple-table output wrapped in ::: divs is not supported
@@ -160,6 +164,40 @@ function Image(el)
         el.src = "media/" .. src
     end
     return el
+end
+
+-- Handle figure environments: preserve captions as visible text and emit
+-- label anchors so \ref{} cross-references can link to the figure.
+-- Pandoc 3.x parses \begin{figure}...\end{figure} into a Figure AST element
+-- whose caption would otherwise be lost (only stored as image alt text).
+function Figure(el)
+    local lines = {}
+
+    -- Emit an anchor for the figure's \label{} so \ref{} can link here
+    local fig_id = el.identifier
+    if fig_id and fig_id ~= "" then
+        table.insert(lines, '<a id="' .. fig_id .. '"></a>')
+        table.insert(lines, "")
+    end
+
+    -- Render the figure content (images, etc.)
+    -- The Image filter has already run, so src paths are correct.
+    local content_doc = pandoc.Pandoc(el.content)
+    local content_md = pandoc.write(content_doc, "markdown"):gsub("%s+$", "")
+    table.insert(lines, content_md)
+
+    -- Extract and render caption as visible italic text below the image
+    local caption_text = ""
+    if el.caption and el.caption.long and #el.caption.long > 0 then
+        local cap_doc = pandoc.Pandoc(el.caption.long)
+        caption_text = pandoc.write(cap_doc, "markdown"):gsub("%s+$", "")
+    end
+    if caption_text ~= "" then
+        table.insert(lines, "")
+        table.insert(lines, "*Figure: " .. caption_text .. "*")
+    end
+
+    return pandoc.RawBlock("markdown", table.concat(lines, "\n"))
 end
 
 -- Clean up Pandoc artifacts from heading attributes
