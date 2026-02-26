@@ -4,7 +4,10 @@ Handles custom macros and environments that Pandoc cannot process directly:
 - siunitx \\SI{}, \\si{}, \\IP{}, \\ip{} macros and custom unit declarations
 - Bracket macros: \\PB{}, \\RB{}, \\CB{}
 - callout environment -> quote (Pandoc-friendly)
-- \\warning{} -> bold warning markers
+- Admonition macros: \\warning{}, \\caution{}, \\important{}, \\tip{},
+  \\note{}, \\example{}, \\seealso{}, \\limitation{} -> bold-prefixed quotes
+- Standalone bold-prefixed paragraphs (\\textbf{Note:} etc.) -> quote environments
+- Plain-text Note:/Caution: prefixes inside callouts -> bold form
 - Strip \\input{} directives (child files are separate pages)
 """
 
@@ -183,6 +186,77 @@ def expand_bracket_macros(text: str) -> str:
     return _expand_all_bracket_macros(text)
 
 
+def normalize_bold_prefix_colons(text: str) -> str:
+    r"""Normalize ``\textbf{Note}:`` to ``\textbf{Note:}`` (move colon inside braces).
+
+    Some EnergyPlus files place the colon *after* the closing brace.  The Lua
+    filter expects the colon inside the bold group (``**Note:**`` not
+    ``**Note**:``), so we normalise the variant.
+    """
+    # Match \textbf{<Label>}: where <Label> is a known admonition keyword
+    return re.sub(
+        r"\\textbf\{(Note|Caution|Warning|Important|Tip|Example|See Also|Limitation)\}:",
+        r"\\textbf{\1:}",
+        text,
+    )
+
+
+def promote_callout_prefixes(text: str) -> str:
+    r"""Convert plain-text admonition prefixes inside callout bodies to bold form.
+
+    Many callout environments start with plain ``Note:``, ``NOTE:``, or
+    ``Caution:`` without ``\textbf{}``.  The Lua filter only detects bold
+    prefixes (``**Note:**``), so these plain-text prefixes are promoted to
+    ``\textbf{Note:}`` etc.  Must run *before* ``convert_callout_env()`` so
+    that the callout delimiters are still present for matching.
+    """
+
+    def _promote(m: re.Match) -> str:
+        body = m.group(1)
+        # Match a leading admonition keyword followed by a colon (required to
+        # avoid false positives like "Note that..." or "Note also that...")
+        prefix_match = re.match(r"\s*(NOTE|Note|Caution|CAUTION):\s*", body)
+        if prefix_match:
+            keyword = prefix_match.group(1).capitalize()
+            # Replace the plain prefix with \textbf{Keyword:}
+            body = re.sub(
+                r"^\s*(?:NOTE|Note|Caution|CAUTION):\s*",
+                rf"\\textbf{{{keyword}:}} ",
+                body,
+                count=1,
+            )
+        return r"\begin{callout}" + body + r"\end{callout}"
+
+    return re.sub(
+        r"\\begin\{callout\}(.*?)\\end\{callout\}",
+        _promote,
+        text,
+        flags=re.DOTALL,
+    )
+
+
+def wrap_standalone_bold_admonitions(text: str) -> str:
+    r"""Wrap standalone ``\textbf{Note:}`` / ``\textbf{Example:}`` paragraphs in quote environments.
+
+    EnergyPlus uses ``\textbf{Note:} text...`` as free-standing paragraphs
+    (not inside callout environments).  Pandoc renders these as normal bold
+    text in a paragraph — the Lua filter never sees them as BlockQuotes.
+    This function wraps them in ``\begin{quote}...\end{quote}`` so the full
+    admonition pipeline applies.
+
+    Only matches paragraphs that begin with the bold prefix at the start of
+    a line (preceded by a blank line or start of string) and continue until
+    the next blank line.
+    """
+    return re.sub(
+        r"(?:^|\n\n)"  # paragraph boundary
+        r"(\\textbf\{(?:Note|Caution|Warning|Important|Tip|Example|See Also|Limitation):}[ ~]*"  # bold prefix
+        r"(?:[^\n]|\n(?!\n))+)",  # rest of paragraph (lines until blank line)
+        lambda m: "\n\n\\begin{quote}\n" + m.group(1) + "\n\\end{quote}",
+        text,
+    )
+
+
 def convert_callout_env(text: str) -> str:
     r"""Convert \begin{callout}...\end{callout} to \begin{quote}...\end{quote}."""
     text = text.replace(r"\begin{callout}", r"\begin{quote}")
@@ -190,17 +264,36 @@ def convert_callout_env(text: str) -> str:
     return text
 
 
-def convert_warning_macro(text: str) -> str:
-    r"""Convert \warning{text} to a quote environment with bold warning prefix.
+# Admonition macros: LaTeX command name -> bold prefix label.
+# Each macro \<name>{text} is converted to \begin{quote}\n\textbf{<Label>} text\n\end{quote}.
+# The Lua filter then detects the bold prefix and emits the corresponding Zensical admonition type.
+_ADMONITION_MACROS: dict[str, str] = {
+    "warning": "Warning:",
+    "caution": "Caution:",
+    "important": "Important:",
+    "tip": "Tip:",
+    "note": "Note:",
+    "example": "Example:",
+    "seealso": "See Also:",
+    "limitation": "Limitation:",
+}
 
-    The Lua filter detects the \textbf{Warning:} prefix inside the resulting
-    blockquote and emits a ``!!! warning`` admonition instead of ``!!! note``.
+
+def convert_admonition_macros(text: str) -> str:
+    r"""Convert admonition macros to quote environments with bold prefixes.
+
+    Handles \warning{}, \caution{}, \important{}, \tip{}, \note{}, \example{},
+    \seealso{}, and \limitation{} macros.  Each is converted to a
+    ``\begin{quote}`` block with a ``\textbf{<Type>:}`` prefix that the Lua
+    filter uses to select the appropriate Zensical admonition type.
     """
-    return re.sub(
-        r"\\warning" + _BRACE_RE,
-        r"\\begin{quote}\n\\textbf{Warning:} \1\n\\end{quote}",
-        text,
-    )
+    for macro_name, label in _ADMONITION_MACROS.items():
+        text = re.sub(
+            rf"\\{macro_name}" + _BRACE_RE,
+            rf"\\begin{{quote}}\n\\textbf{{{label}}} \1\n\\end{{quote}}",
+            text,
+        )
+    return text
 
 
 def strip_input_directives(text: str) -> str:
@@ -396,8 +489,11 @@ def preprocess(text: str, *, source_hint: str = "") -> str:
     text = strip_longtable_continuations(text)
     text = expand_si_macros(text)
     text = expand_bracket_macros(text)
+    text = normalize_bold_prefix_colons(text)
+    text = promote_callout_prefixes(text)
+    text = wrap_standalone_bold_admonitions(text)
     text = convert_callout_env(text)
-    text = convert_warning_macro(text)
+    text = convert_admonition_macros(text)
     text = convert_wherelist_env(text)
     text = strip_tex_spacing_primitives(text)
     text = clean_label_commands(text)
