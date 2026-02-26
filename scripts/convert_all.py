@@ -47,7 +47,7 @@ def clone_version(version: str, clone_dir: Path) -> Path:
 
         shutil.rmtree(target)
 
-    logger.info("Cloning EnergyPlus %s (sparse, doc/ only)...", version)
+    logger.info("Cloning EnergyPlus %s (sparse, doc/ + idd/)...", version)
 
     subprocess.run(
         [
@@ -66,8 +66,9 @@ def clone_version(version: str, clone_dir: Path) -> Path:
         capture_output=True,
         text=True,
     )
+    # Sparse-checkout doc/ (LaTeX source) and idd/ (IDD for Monaco hover docs)
     subprocess.run(
-        ["git", "-C", str(target), "sparse-checkout", "set", "doc"],
+        ["git", "-C", str(target), "sparse-checkout", "set", "doc", "idd"],
         check=True,
         capture_output=True,
     )

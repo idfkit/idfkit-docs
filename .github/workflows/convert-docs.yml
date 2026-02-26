@@ -75,10 +75,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y pandoc
 
+      - name: Build IDF editor bundle
+        run: |
+          cd idf-editor && npm ci --silent && npm run build
+          cp dist/idf-editor.js dist/idf-editor.css ../scripts/assets/
+
       - name: Compute cache key
         id: cache-key
         run: |
-          SCRIPTS_HASH=$(find scripts/ -type f -name '*.py' -o -name '*.lua' | sort | xargs sha256sum | sha256sum | cut -d' ' -f1)
+          SCRIPTS_HASH=$(find scripts/ idf-editor/src/ -type f \( -name '*.py' -o -name '*.lua' -o -name '*.ts' -o -name '*.css' \) | sort | xargs sha256sum | sha256sum | cut -d' ' -f1)
           echo "key=docs-${{ matrix.version }}-${SCRIPTS_HASH}" >> "$GITHUB_OUTPUT"
 
       - name: Cache built version
@@ -95,14 +100,14 @@ jobs:
           SHORT=$(uv run python -c "from scripts.config import version_to_short; print(version_to_short('${{ matrix.version }}'))")
           echo "version_short=${SHORT}" >> "$GITHUB_OUTPUT"
 
-      - name: Clone EnergyPlus source (sparse, doc/ only)
+      - name: Clone EnergyPlus source (sparse, doc/ + idd/)
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           git clone --filter=blob:none --no-checkout --depth=1 \
             --branch ${{ matrix.version }} --single-branch \
             https://github.com/NatLabRockies/EnergyPlus.git \
             build/sources/${{ matrix.version }}
-          git -C build/sources/${{ matrix.version }} sparse-checkout set doc
+          git -C build/sources/${{ matrix.version }} sparse-checkout set doc idd
           git -C build/sources/${{ matrix.version }} checkout
 
       - name: Convert docs

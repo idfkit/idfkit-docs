@@ -41,8 +41,15 @@ serve: ## Serve the full multi-version site from dist/
 	@echo "Serving full site from dist/ on http://localhost:8003"
 	@uv run python -m http.server 8003 --directory dist
 
+.PHONY: build-editor
+build-editor: ## Build the IDF Monaco editor bundle
+	@echo "🔧 Building IDF editor bundle..."
+	@cd idf-editor && npm ci --silent && npm run build
+	@cp idf-editor/dist/idf-editor.js idf-editor/dist/idf-editor.css scripts/assets/
+	@echo "✅ IDF editor bundle built and copied to scripts/assets/"
+
 .PHONY: convert
-convert: ## Convert a single EnergyPlus version (usage: make convert VERSION=v25.2.0)
+convert: build-editor ## Convert a single EnergyPlus version (usage: make convert VERSION=v25.2.0)
 	@if [ -z "$(VERSION)" ]; then echo "Usage: make convert VERSION=v25.2.0"; exit 1; fi
 	@echo "Converting EnergyPlus $(VERSION)..."
 	@mkdir -p build/sources
@@ -51,7 +58,7 @@ convert: ## Convert a single EnergyPlus version (usage: make convert VERSION=v25
 		git clone --filter=blob:none --no-checkout --depth=1 \
 			--branch $(VERSION) --single-branch \
 			https://github.com/NatLabRockies/EnergyPlus.git build/sources/$(VERSION) && \
-		git -C build/sources/$(VERSION) sparse-checkout set doc && \
+		git -C build/sources/$(VERSION) sparse-checkout set doc idd && \
 		git -C build/sources/$(VERSION) checkout; \
 	fi
 	@uv run python -m scripts.convert \

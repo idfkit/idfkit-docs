@@ -10,6 +10,10 @@ inputs:
     description: "uv version to use"
     required: true
     default: "0.9"
+  node-version:
+    description: "Node.js version to use"
+    required: true
+    default: "20"
 
 runs:
   using: "composite"
@@ -28,3 +32,9 @@ runs:
     - name: Install Python dependencies
       run: uv sync --frozen
       shell: bash
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: 'npm'
+        cache-dependency-path: idf-editor/package-lock.json

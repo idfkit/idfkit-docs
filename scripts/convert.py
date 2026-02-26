@@ -33,6 +33,7 @@ from scripts.config import (
     IMAGE_EXTENSIONS,
     version_to_title,
 )
+from scripts.idd_schema_builder import build_compact_schema, find_idd_file
 from scripts.latex_preprocessor import preprocess
 from scripts.markdown_postprocessor import postprocess
 from scripts.models import ConversionResult, DocSet, DocSetResult, LabelRef, VersionResult
@@ -644,13 +645,14 @@ def generate_zensical_config(
     # Tags for cmd-k search filtering
     extra["tags"] = {ds.title: ds.slug for ds in doc_sets}
 
-    # MathJax with equation numbering + equation tooltips
+    # MathJax with equation numbering + equation tooltips + IDF Monaco editor
     project["extra_javascript"] = [
         {"path": "assets/mathjax-config.js"},
         {"path": "https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js", "async": True},
         {"path": "assets/eq-tooltips.js"},
+        {"path": "assets/idf-editor.js", "defer": True},
     ]
-    project["extra_css"] = ["assets/eq-tooltips.css", "assets/figures.css"]
+    project["extra_css"] = ["assets/eq-tooltips.css", "assets/figures.css", "assets/idf-editor.css"]
 
     config_path = output_dir / "zensical.toml"
     config_path.write_text(tomli_w.dumps(config))
@@ -740,8 +742,19 @@ def convert_version(
     # Generate zensical config
     generate_zensical_config(version, doc_sets, output_dir)
 
-    # Copy static assets (MathJax config, equation tooltips)
+    # Copy static assets (MathJax config, equation tooltips, IDF editor)
     copy_assets(output_dir)
+
+    # Generate IDD schema JSON for Monaco hover documentation
+    idd_path = find_idd_file(source_dir)
+    if idd_path:
+        schema_output = output_dir / "docs" / "assets" / "idd-schema.json"
+        if build_compact_schema(idd_path, schema_output):
+            logger.info("IDD schema generated for Monaco hover docs")
+        else:
+            logger.warning("Failed to generate IDD schema — hover docs will be unavailable")
+    else:
+        logger.warning("No IDD file found in %s — hover docs will be unavailable", source_dir)
 
     # Build site
     if not skip_build:
