@@ -318,6 +318,10 @@ def clean_pandoc_artifacts(text: str) -> str:
     # (be careful not to break underscores in math mode)
     # Only fix double-escaped underscores
     text = text.replace(r"\\_", "_")
+    # Separate consecutive display-math blocks.  Pandoc writes consecutive
+    # RawBlocks without blank lines, so "$$\n$$" (closing then opening)
+    # causes arithmatex to merge them into one block.
+    text = re.sub(r"^\$\$\n\$\$$", "$$\n\n$$", text, flags=re.MULTILINE)
     # Collapse more than 2 consecutive blank lines to 2
     text = re.sub(r"\n{4,}", "\n\n\n", text)
     # Remove trailing whitespace from lines
@@ -327,8 +331,8 @@ def clean_pandoc_artifacts(text: str) -> str:
 
 def clean_empty_links(text: str) -> str:
     """Remove empty links and fix malformed link syntax."""
-    # Remove [](empty) links
-    text = re.sub(r"\[\]\([^)]*\)", "", text)
+    # Remove [](empty) links but NOT ![](src) images (negative lookbehind for !)
+    text = re.sub(r"(?<!!)\[\]\([^)]*\)", "", text)
     # Clean empty bracket artifacts in image alt text: ![caption []]( → ![caption](
     # Uses .*? to handle alt text that itself contains brackets (e.g. equation refs)
     text = re.sub(r"(!\[.*?)\s*\[\](\]\()", r"\1\2", text)

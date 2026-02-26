@@ -5,8 +5,12 @@
 -- 2. CodeBlock -> fenced code blocks with language class
 -- 3. BlockQuote -> admonition conversion (from callout environment)
 -- 4. Image path resolution (media/ relative references)
--- 5. Cross-reference handling via label index
--- 6. Definition list formatting for wherelist remnants
+-- 5. Figure -> caption preservation and label anchors
+-- 6. Link -> intercept Pandoc's \ref{}/\eqref{} for cross-reference resolution
+-- 7. Math -> fix \textsubscript/\textsuperscript in math mode
+-- 8. Para -> split DisplayMath into standalone blocks with equation numbering
+-- 9. Cross-reference handling via label index
+-- 10. Definition list formatting for wherelist remnants
 
 -- Convert Table elements to pipe-table markdown for proper rendering.
 -- Pandoc's default simple-table output wrapped in ::: divs is not supported
@@ -160,6 +164,70 @@ function Image(el)
         el.src = "media/" .. src
     end
     return el
+end
+
+-- Handle figure environments: preserve captions as visible text and emit
+-- label anchors so \ref{} cross-references can link to the figure.
+-- Pandoc 3.x parses \begin{figure}...\end{figure} into a Figure AST element
+-- whose caption would otherwise be lost (only stored as image alt text).
+--
+-- We walk the Figure's content blocks directly to extract Image elements
+-- instead of re-serializing through pandoc.write(), which produces
+-- implicit-figure markdown (![](src)) that clean_empty_links can corrupt.
+function Figure(el)
+    local lines = {}
+
+    -- Emit an anchor for the figure's \label{} so \ref{} can link here
+    local fig_id = el.identifier
+    if fig_id and fig_id ~= "" then
+        table.insert(lines, '<a id="' .. fig_id .. '"></a>')
+        table.insert(lines, "")
+    end
+
+    -- Extract caption: plain-text for image alt attribute, markdown for
+    -- the visible "*Figure: ...*" line.
+    local alt_text = ""
+    local caption_md = ""
+    if el.caption and el.caption.long and #el.caption.long > 0 then
+        alt_text = pandoc.utils.stringify(pandoc.Pandoc(el.caption.long))
+        -- Strip \label{} artifacts that Pandoc leaves in captions
+        -- (e.g. \protect\label{} becomes empty brackets "[]")
+        alt_text = alt_text:gsub("%s*%[%]", ""):gsub("^%s+", ""):gsub("%s+$", "")
+
+        caption_md = pandoc.write(pandoc.Pandoc(el.caption.long), "markdown")
+        caption_md = caption_md:gsub("%s*%[%]", "")
+        caption_md = caption_md:gsub('%s*<span id="[^"]*"></span>', "")
+        caption_md = caption_md:gsub("^%s+", ""):gsub("%s+$", "")
+    end
+
+    -- Walk content blocks to find Image elements and render them directly.
+    -- The Image filter has already run so src paths are correct.
+    local images_rendered = false
+    for _, block in ipairs(el.content) do
+        if block.t == "Plain" or block.t == "Para" then
+            for _, inline in ipairs(block.content) do
+                if inline.t == "Image" then
+                    images_rendered = true
+                    table.insert(lines, "![" .. alt_text .. "](" .. inline.src .. ")")
+                end
+            end
+        end
+    end
+
+    -- Fallback for figures without images (rare but possible)
+    if not images_rendered then
+        local content_doc = pandoc.Pandoc(el.content)
+        local content_md = pandoc.write(content_doc, "markdown"):gsub("%s+$", "")
+        table.insert(lines, content_md)
+    end
+
+    -- Add visible caption below the image
+    if caption_md ~= "" then
+        table.insert(lines, "")
+        table.insert(lines, "*Figure: " .. caption_md .. "*")
+    end
+
+    return pandoc.RawBlock("markdown", table.concat(lines, "\n"))
 end
 
 -- Clean up Pandoc artifacts from heading attributes
