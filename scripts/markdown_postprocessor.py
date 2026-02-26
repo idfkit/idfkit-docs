@@ -318,6 +318,10 @@ def clean_pandoc_artifacts(text: str) -> str:
     # (be careful not to break underscores in math mode)
     # Only fix double-escaped underscores
     text = text.replace(r"\\_", "_")
+    # Separate consecutive display-math blocks.  Pandoc writes consecutive
+    # RawBlocks without blank lines, so "$$\n$$" (closing then opening)
+    # causes arithmatex to merge them into one block.
+    text = re.sub(r"^\$\$\n\$\$$", "$$\n\n$$", text, flags=re.MULTILINE)
     # Collapse more than 2 consecutive blank lines to 2
     text = re.sub(r"\n{4,}", "\n\n\n", text)
     # Remove trailing whitespace from lines
