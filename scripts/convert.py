@@ -331,7 +331,9 @@ def generate_doc_set_index(doc_set: DocSet, output_dir: Path, first_page: str) -
     """Generate an index.md for a doc set section so browsing the section URL works."""
     index_path = output_dir / "docs" / doc_set.slug / "index.md"
     index_path.parent.mkdir(parents=True, exist_ok=True)
-    index_path.write_text(f"---\ntitle: {doc_set.title}\ntags:\n  - {doc_set.title}\n---\n\n# {doc_set.title}\n")
+    index_path.write_text(
+        f"---\ntitle: {doc_set.title}\ntags:\n  - {doc_set.title}\nhide:\n  - tags\n---\n\n# {doc_set.title}\n"
+    )
 
 
 def _append_child_toc(
