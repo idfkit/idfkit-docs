@@ -78,6 +78,8 @@ def add_front_matter(text: str, title: str, doc_set_title: str = "") -> str:
     if doc_set_title:
         lines.append("tags:")
         lines.append(f"  - {doc_set_title}")
+    lines.append("hide:")
+    lines.append("  - tags")
     lines.append("---")
     return "\n".join(lines) + "\n\n" + text
 
