@@ -650,7 +650,7 @@ def generate_zensical_config(
         {"path": "https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js", "async": True},
         {"path": "assets/eq-tooltips.js"},
     ]
-    project["extra_css"] = ["assets/eq-tooltips.css"]
+    project["extra_css"] = ["assets/eq-tooltips.css", "assets/figures.css"]
 
     config_path = output_dir / "zensical.toml"
     config_path.write_text(tomli_w.dumps(config))
