@@ -3,7 +3,7 @@
 -- Handles:
 -- 1. Table -> pipe-table markdown (longtable, tabular)
 -- 2. CodeBlock -> fenced code blocks with language class
--- 3. BlockQuote -> admonition conversion (from callout environment)
+-- 3. BlockQuote -> admonition conversion (note, warning, tip, danger, etc.)
 -- 4. Image path resolution (media/ relative references)
 -- 5. Figure -> caption preservation and label anchors
 -- 6. Link -> intercept Pandoc's \ref{}/\eqref{} for cross-reference resolution
@@ -121,22 +121,49 @@ function CodeBlock(el)
     return el
 end
 
+-- Admonition prefix mapping: bold-text prefixes in blockquotes are detected
+-- and mapped to Zensical admonition types with display titles.
+-- Longer prefixes are listed first to avoid partial matches.
+-- Each entry: { pattern = Lua pattern, strip = gsub pattern, type, title }
+local ADMONITION_MAP = {
+    { pattern = "^%*%*See Also:%*%*",   strip = "^%*%*See Also:%*%*%s*",   type = "abstract", title = "See Also" },
+    { pattern = "^%*%*Limitation:%*%*",  strip = "^%*%*Limitation:%*%*%s*",  type = "failure",  title = "Limitation" },
+    { pattern = "^%*%*Important:%*%*",   strip = "^%*%*Important:%*%*%s*",   type = "info",     title = "Important" },
+    { pattern = "^%*%*Warning:%*%*",     strip = "^%*%*Warning:%*%*%s*",     type = "warning",  title = "Warning" },
+    { pattern = "^%*%*Caution:%*%*",     strip = "^%*%*Caution:%*%*%s*",     type = "danger",   title = "Caution" },
+    { pattern = "^%*%*Example:%*%*",     strip = "^%*%*Example:%*%*%s*",     type = "example",  title = "Example" },
+    { pattern = "^%*%*Note:%*%*",        strip = "^%*%*Note:%*%*%s*",        type = "note",     title = "Note" },
+    { pattern = "^%*%*Tip:%*%*",         strip = "^%*%*Tip:%*%*%s*",         type = "tip",      title = "Tip" },
+}
+
 -- Convert BlockQuotes (originally callout/warning environments) to admonition syntax.
 -- Pandoc converts \begin{quote}...\end{quote} to BlockQuote elements.
--- We detect the content prefix to choose the admonition type:
---   **Warning:** ... -> !!! warning
---   (default)       -> !!! note
+-- We detect the content prefix to choose the admonition type and title:
+--   **Warning:** ... -> !!! warning "Warning"
+--   **Caution:** ... -> !!! danger "Caution"
+--   **Note:** ...    -> !!! note "Note"
+--   **Important:** . -> !!! info "Important"
+--   **Tip:** ...     -> !!! tip "Tip"
+--   **Example:** ... -> !!! example "Example"
+--   **See Also:** .. -> !!! abstract "See Also"
+--   **Limitation:** . -> !!! failure "Limitation"
+--   (default)        -> !!! note ""
 function BlockQuote(el)
     -- Build the admonition as a raw markdown block
     local content = pandoc.write(pandoc.Pandoc(el.content), "markdown")
 
     -- Detect admonition type from content prefix
     local admonition_type = "note"
+    local admonition_title = ""
 
-    if content:match("^%*%*Warning:%*%*") then
-        admonition_type = "warning"
-        -- Strip the prefix; the admonition type already conveys it
-        content = content:gsub("^%*%*Warning:%*%*%s*", "")
+    for _, entry in ipairs(ADMONITION_MAP) do
+        if content:match(entry.pattern) then
+            admonition_type = entry.type
+            admonition_title = entry.title
+            -- Strip the prefix; the admonition type/title already conveys it
+            content = content:gsub(entry.strip, "")
+            break
+        end
     end
 
     -- Indent all lines by 4 spaces for admonition body
@@ -149,7 +176,7 @@ function BlockQuote(el)
         end
     end
 
-    local result = '!!! ' .. admonition_type .. ' ""\n' .. indented
+    local result = '!!! ' .. admonition_type .. ' "' .. admonition_title .. '"\n' .. indented
     return pandoc.RawBlock("markdown", result)
 end
 

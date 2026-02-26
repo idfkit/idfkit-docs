@@ -4,7 +4,8 @@ Handles custom macros and environments that Pandoc cannot process directly:
 - siunitx \\SI{}, \\si{}, \\IP{}, \\ip{} macros and custom unit declarations
 - Bracket macros: \\PB{}, \\RB{}, \\CB{}
 - callout environment -> quote (Pandoc-friendly)
-- \\warning{} -> bold warning markers
+- Admonition macros: \\warning{}, \\caution{}, \\important{}, \\tip{},
+  \\note{}, \\example{}, \\seealso{}, \\limitation{} -> bold-prefixed quotes
 - Strip \\input{} directives (child files are separate pages)
 """
 
@@ -190,17 +191,36 @@ def convert_callout_env(text: str) -> str:
     return text
 
 
-def convert_warning_macro(text: str) -> str:
-    r"""Convert \warning{text} to a quote environment with bold warning prefix.
+# Admonition macros: LaTeX command name -> bold prefix label.
+# Each macro \<name>{text} is converted to \begin{quote}\n\textbf{<Label>} text\n\end{quote}.
+# The Lua filter then detects the bold prefix and emits the corresponding Zensical admonition type.
+_ADMONITION_MACROS: dict[str, str] = {
+    "warning": "Warning:",
+    "caution": "Caution:",
+    "important": "Important:",
+    "tip": "Tip:",
+    "note": "Note:",
+    "example": "Example:",
+    "seealso": "See Also:",
+    "limitation": "Limitation:",
+}
 
-    The Lua filter detects the \textbf{Warning:} prefix inside the resulting
-    blockquote and emits a ``!!! warning`` admonition instead of ``!!! note``.
+
+def convert_admonition_macros(text: str) -> str:
+    r"""Convert admonition macros to quote environments with bold prefixes.
+
+    Handles \warning{}, \caution{}, \important{}, \tip{}, \note{}, \example{},
+    \seealso{}, and \limitation{} macros.  Each is converted to a
+    ``\begin{quote}`` block with a ``\textbf{<Type>:}`` prefix that the Lua
+    filter uses to select the appropriate Zensical admonition type.
     """
-    return re.sub(
-        r"\\warning" + _BRACE_RE,
-        r"\\begin{quote}\n\\textbf{Warning:} \1\n\\end{quote}",
-        text,
-    )
+    for macro_name, label in _ADMONITION_MACROS.items():
+        text = re.sub(
+            rf"\\{macro_name}" + _BRACE_RE,
+            rf"\\begin{{quote}}\n\\textbf{{{label}}} \1\n\\end{{quote}}",
+            text,
+        )
+    return text
 
 
 def strip_input_directives(text: str) -> str:
@@ -397,7 +417,7 @@ def preprocess(text: str, *, source_hint: str = "") -> str:
     text = expand_si_macros(text)
     text = expand_bracket_macros(text)
     text = convert_callout_env(text)
-    text = convert_warning_macro(text)
+    text = convert_admonition_macros(text)
     text = convert_wherelist_env(text)
     text = strip_tex_spacing_primitives(text)
     text = clean_label_commands(text)
