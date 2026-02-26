@@ -153,17 +153,96 @@ def _compute_equation_numbers(text: str) -> dict[str, tuple[str, int]]:
     return result
 
 
-def build_label_index(source_dir: Path, doc_sets: list[DocSet]) -> dict[str, LabelRef]:
+def _count_page_figures(
+    text: str,
+    fig_counter: int,
+) -> tuple[list[int], dict[str, int], int]:
+    r"""Count ``\begin{figure}`` environments in a single .tex file.
+
+    Returns ``(page_fignums, label_to_num, updated_counter)`` where
+    *page_fignums* is the ordered list of doc-set-wide figure numbers for
+    every figure in this file (labeled or not), *label_to_num* maps
+    labeled figures to their number, and *updated_counter* is the running
+    counter after processing this file.
+    """
+    page_fignums: list[int] = []
+    label_to_num: dict[str, int] = {}
+
+    for fig_m in re.finditer(r"\\begin\{figure\*?\}(.*?)\\end\{figure\*?\}", text, re.DOTALL):
+        fig_counter += 1
+        page_fignums.append(fig_counter)
+        body = fig_m.group(1)
+        label_m = re.search(r"\\label\{([^}]+)\}", body)
+        if label_m:
+            label_to_num[label_m.group(1)] = fig_counter
+
+    return page_fignums, label_to_num, fig_counter
+
+
+def _register_labels(
+    text: str,
+    md_path: str,
+    eq_info: dict[str, tuple[str, int]],
+    fig_label_to_num: dict[str, int],
+    label_index: dict[str, LabelRef],
+) -> None:
+    r"""Register all ``\label{}`` directives found in *text* into *label_index*."""
+    for m in re.finditer(r"\\label\{([^}]+)\}", text):
+        label = m.group(1)
+        if label in eq_info:
+            eq_body, eq_num = eq_info[label]
+            label_index[label] = LabelRef(
+                label=label,
+                output_path=md_path,
+                heading_anchor=label,
+                label_type="equation",
+                equation_latex=eq_body,
+                equation_number=eq_num,
+            )
+        elif label in fig_label_to_num:
+            label_index[label] = LabelRef(
+                label=label,
+                output_path=md_path,
+                heading_anchor=label,
+                label_type="figure",
+                figure_number=fig_label_to_num[label],
+            )
+        else:
+            # Only set heading_anchor for labels whose anchors survive
+            # in the final output.  Figure labels get explicit <a id="...">
+            # anchors from the Lua filter's Figure handler.  Section labels
+            # (sec:*) are absorbed into Pandoc heading attributes ({#sec:...})
+            # which clean_pandoc_artifacts strips, so anchoring to them
+            # would create dead fragment links.
+            anchor = label if label.startswith("fig:") else ""
+            label_index[label] = LabelRef(label=label, output_path=md_path, heading_anchor=anchor)
+
+
+def build_label_index(source_dir: Path, doc_sets: list[DocSet]) -> tuple[dict[str, LabelRef], dict[str, list[int]]]:
     r"""Scan all .tex files for \label{} and map to output markdown paths.
 
     For labels inside equation/align environments, stores the equation body,
     sets ``label_type="equation"``, and pre-computes the MathJax AMS equation
     number so cross-page references can display the correct number.
+
+    For labels inside figure environments, sets ``label_type="figure"`` and
+    computes the doc-set-wide figure number.
+
+    Returns:
+        A tuple of ``(label_index, file_figure_numbers)`` where
+        *file_figure_numbers* maps each markdown file path to an ordered
+        list of doc-set-wide figure numbers for all figures in that file
+        (both labeled and unlabeled).
     """
     label_index: dict[str, LabelRef] = {}
+    file_figure_numbers: dict[str, list[int]] = {}
+    total_figures = 0
 
     for ds in doc_sets:
         inputs = parse_input_chain(ds.main_tex)
+        fig_counter = 0
+        fig_label_to_num: dict[str, int] = {}
+
         for inp in inputs:
             if inp == "src/title" or inp.endswith("/title"):
                 continue
@@ -173,38 +252,23 @@ def build_label_index(source_dir: Path, doc_sets: list[DocSet]) -> dict[str, Lab
                 continue
 
             text = tex_path.read_text(errors="replace")
-            # Strip "src/" prefix for the md path
             md_rel = inp[4:] if inp.startswith("src/") else inp
             md_path = f"{ds.slug}/{md_rel}.md"
 
-            # Compute equation numbers for this page
+            # Count figures in this file and assign doc-set-wide numbers
+            page_fignums, page_fig_labels, fig_counter = _count_page_figures(text, fig_counter)
+            fig_label_to_num.update(page_fig_labels)
+            if page_fignums:
+                file_figure_numbers[md_path] = page_fignums
+
+            # Compute equation numbers and register all labels
             eq_info = _compute_equation_numbers(text)
+            _register_labels(text, md_path, eq_info, fig_label_to_num, label_index)
 
-            # Register all labels
-            for m in re.finditer(r"\\label\{([^}]+)\}", text):
-                label = m.group(1)
-                if label in eq_info:
-                    eq_body, eq_num = eq_info[label]
-                    label_index[label] = LabelRef(
-                        label=label,
-                        output_path=md_path,
-                        heading_anchor=label,
-                        label_type="equation",
-                        equation_latex=eq_body,
-                        equation_number=eq_num,
-                    )
-                else:
-                    # Only set heading_anchor for labels whose anchors survive
-                    # in the final output.  Figure labels get explicit <a id="...">
-                    # anchors from the Lua filter's Figure handler.  Section labels
-                    # (sec:*) are absorbed into Pandoc heading attributes ({#sec:...})
-                    # which clean_pandoc_artifacts strips, so anchoring to them
-                    # would create dead fragment links.
-                    anchor = label if label.startswith("fig:") else ""
-                    label_index[label] = LabelRef(label=label, output_path=md_path, heading_anchor=anchor)
+        total_figures += fig_counter
 
-    logger.info("Built label index with %d entries", len(label_index))
-    return label_index
+    logger.info("Built label index with %d entries (%d figures)", len(label_index), total_figures)
+    return label_index, file_figure_numbers
 
 
 def copy_media(doc_set: DocSet, output_dir: Path) -> None:
@@ -229,6 +293,7 @@ def convert_tex_file(
     rel_depth: int = 0,
     doc_set_title: str = "",
     current_md_path: str = "",
+    figure_numbers: list[int] | None = None,
 ) -> ConversionResult:
     """Convert a single .tex file to Markdown via preprocessing -> Pandoc -> postprocessing."""
     warnings: list[str] = []
@@ -296,6 +361,7 @@ def convert_tex_file(
             label_index=label_index,
             rel_depth=rel_depth,
             current_md_path=current_md_path,
+            figure_numbers=figure_numbers,
         )
 
         # Write output
@@ -395,8 +461,11 @@ def _convert_files(
     doc_set_title: str,
     label_index: dict[str, LabelRef],
     max_workers: int,
+    file_figure_numbers: dict[str, list[int]] | None = None,
 ) -> list[tuple[str, ConversionResult]]:
     """Run file conversions, using a thread pool when *max_workers* > 1."""
+    if file_figure_numbers is None:
+        file_figure_numbers = {}
     converted: list[tuple[str, ConversionResult]] = []
     if max_workers > 1 and len(tasks) > 1:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -410,6 +479,7 @@ def _convert_files(
                     rel_depth,
                     doc_set_title,
                     current_md_path,
+                    file_figure_numbers.get(current_md_path),
                 ): inp
                 for inp, tex_path, output_path, rel_depth, current_md_path in tasks
             }
@@ -428,6 +498,7 @@ def _convert_files(
                     rel_depth=rel_depth,
                     doc_set_title=doc_set_title,
                     current_md_path=current_md_path,
+                    figure_numbers=file_figure_numbers.get(current_md_path),
                 ),
             ))
     return converted
@@ -466,6 +537,7 @@ def convert_doc_set(
     label_index: dict[str, LabelRef],
     *,
     max_workers: int = 1,
+    file_figure_numbers: dict[str, list[int]] | None = None,
 ) -> DocSetResult:
     """Convert all files in a doc set.
 
@@ -481,7 +553,7 @@ def convert_doc_set(
     tasks = _collect_tasks(inputs, doc_set, output_dir, parent_children, result)
 
     # Phase 1: Convert files (parallel when max_workers > 1)
-    converted = _convert_files(tasks, doc_set.slug, doc_set.title, label_index, max_workers)
+    converted = _convert_files(tasks, doc_set.slug, doc_set.title, label_index, max_workers, file_figure_numbers)
 
     # Phase 2: Log results and append TOCs (must happen after files are written)
     for inp, file_result in converted:
@@ -646,12 +718,14 @@ def convert_version(
     logger.info("Found %d doc sets for %s: %s", len(doc_sets), version, [ds.dir_name for ds in doc_sets])
 
     # Build label index across all doc sets
-    label_index = build_label_index(source_dir, doc_sets)
+    label_index, file_figure_numbers = build_label_index(source_dir, doc_sets)
 
     # Convert each doc set
     for ds in doc_sets:
         logger.info("Converting doc set: %s", ds.title)
-        ds_result = convert_doc_set(ds, output_dir, label_index, max_workers=max_workers)
+        ds_result = convert_doc_set(
+            ds, output_dir, label_index, max_workers=max_workers, file_figure_numbers=file_figure_numbers
+        )
         result.doc_set_results.append(ds_result)
         logger.info(
             "  %s: %d/%d files converted",

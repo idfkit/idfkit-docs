@@ -221,10 +221,12 @@ function Figure(el)
         table.insert(lines, content_md)
     end
 
-    -- Add visible caption below the image
+    -- Add visible caption below the image with figure number placeholder.
+    -- The <!-- fignum --> marker is resolved to the actual number by the
+    -- postprocessor using the doc-set-wide figure numbering index.
     if caption_md ~= "" then
         table.insert(lines, "")
-        table.insert(lines, "*Figure: " .. caption_md .. "*")
+        table.insert(lines, "*Figure <!-- fignum -->: " .. caption_md .. "*")
     end
 
     return pandoc.RawBlock("markdown", table.concat(lines, "\n"))
