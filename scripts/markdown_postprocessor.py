@@ -327,8 +327,8 @@ def clean_pandoc_artifacts(text: str) -> str:
 
 def clean_empty_links(text: str) -> str:
     """Remove empty links and fix malformed link syntax."""
-    # Remove [](empty) links
-    text = re.sub(r"\[\]\([^)]*\)", "", text)
+    # Remove [](empty) links but NOT ![](src) images (negative lookbehind for !)
+    text = re.sub(r"(?<!!)\[\]\([^)]*\)", "", text)
     # Clean empty bracket artifacts in image alt text: ![caption []]( → ![caption](
     # Uses .*? to handle alt text that itself contains brackets (e.g. equation refs)
     text = re.sub(r"(!\[.*?)\s*\[\](\]\()", r"\1\2", text)
