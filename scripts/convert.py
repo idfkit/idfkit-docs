@@ -194,7 +194,14 @@ def build_label_index(source_dir: Path, doc_sets: list[DocSet]) -> dict[str, Lab
                         equation_number=eq_num,
                     )
                 else:
-                    label_index[label] = LabelRef(label=label, output_path=md_path, heading_anchor=label)
+                    # Only set heading_anchor for labels whose anchors survive
+                    # in the final output.  Figure labels get explicit <a id="...">
+                    # anchors from the Lua filter's Figure handler.  Section labels
+                    # (sec:*) are absorbed into Pandoc heading attributes ({#sec:...})
+                    # which clean_pandoc_artifacts strips, so anchoring to them
+                    # would create dead fragment links.
+                    anchor = label if label.startswith("fig:") else ""
+                    label_index[label] = LabelRef(label=label, output_path=md_path, heading_anchor=anchor)
 
     logger.info("Built label index with %d entries", len(label_index))
     return label_index
