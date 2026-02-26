@@ -151,6 +151,31 @@ def rewrite_image_paths(text: str, doc_set_slug: str, rel_depth: int = 0) -> str
     return re.sub(r"!\[((?:[^\[\]]|\[(?:[^\[\]]|\[[^\]]*\])*\])*)\]\(([^)]+)\)", rewrite, text)
 
 
+def resolve_figure_numbers(text: str, figure_numbers: list[int] | None = None) -> str:
+    """Replace ``<!-- fignum -->`` markers in figure captions with actual numbers.
+
+    The Lua filter emits ``*Figure <!-- fignum -->: caption*`` for each figure.
+    This function replaces each marker with the corresponding doc-set-wide
+    figure number from *figure_numbers* (one entry per figure, in order).
+    """
+    if not figure_numbers:
+        # No figure data — strip markers to leave unnumbered captions
+        return text.replace("<!-- fignum -->", "")
+
+    idx = 0
+
+    def _replace(m: re.Match) -> str:
+        nonlocal idx
+        if idx < len(figure_numbers):
+            num = figure_numbers[idx]
+            idx += 1
+            return str(num)
+        idx += 1
+        return ""
+
+    return re.sub(r"<!-- fignum -->", _replace, text)
+
+
 def resolve_cross_references(text: str, label_index: dict[str, LabelRef], current_md_path: str = "") -> str:
     """Resolve #crossref:label links using the label index.
 
@@ -187,6 +212,10 @@ def resolve_cross_references(text: str, label_index: dict[str, LabelRef], curren
                 eq_text = str(ref.equation_number) if ref.equation_number else "#"
                 return f'<a href="{target_url}#{anchor}" class="eq-ref" data-equation="{escaped_latex}">{eq_text}</a>'
 
+            # Figure-type labels: use "Figure N" as link text
+            if ref.label_type == "figure" and ref.figure_number:
+                link_text = f"Figure {ref.figure_number}"
+
             anchor = f"#{ref.heading_anchor}" if ref.heading_anchor else ""
             target_path = ref.output_path
             if current_dir:
@@ -196,6 +225,16 @@ def resolve_cross_references(text: str, label_index: dict[str, LabelRef], curren
         return f"[{link_text}](#{label})"
 
     return re.sub(r"\[([^\]]*)\]\(#crossref:([^)]+)\)", resolve, text)
+
+
+def clean_figure_link_prefix(text: str) -> str:
+    r"""Remove duplicate "Figure" text preceding figure reference links.
+
+    In LaTeX, authors write ``Figure~\ref{fig:...}`` which produces
+    ``Figure [Figure N](...)`` after cross-reference resolution.  This
+    function collapses the duplicate so only the linked version remains.
+    """
+    return re.sub(r"(?:Figure|figure)\s+(\[Figure \d+\])", r"\1", text)
 
 
 def _label_to_mjx_anchor(label: str) -> str:
@@ -363,6 +402,7 @@ def postprocess(
     label_index: dict[str, LabelRef] | None = None,
     rel_depth: int = 0,
     current_md_path: str = "",
+    figure_numbers: list[int] | None = None,
 ) -> str:
     """Apply all postprocessing transformations in the correct order."""
     if label_index is None:
@@ -376,8 +416,10 @@ def postprocess(
     text = fix_ordered_list_markers(text)
     text = fix_admonition_indent(text)
     text = rewrite_image_paths(text, doc_set_slug, rel_depth=rel_depth)
+    text = resolve_figure_numbers(text, figure_numbers)
     text = resolve_equation_references(text, label_index, current_md_path=current_md_path)
     text = resolve_cross_references(text, label_index, current_md_path=current_md_path)
+    text = clean_figure_link_prefix(text)
     text = clean_pandoc_artifacts(text)
     text = fix_heading_dashes(text)
     text = clean_empty_links(text)
