@@ -30,3 +30,6 @@ Thumbs.db
 
 # Pre-commit cache
 .cache
+
+# Downloaded binaries (e.g. pypandoc)
+*.deb
