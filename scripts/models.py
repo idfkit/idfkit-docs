@@ -113,3 +113,34 @@ class VersionEntry:
     version: str
     title: str
     aliases: list[str] = field(default_factory=list)
+
+
+@dataclass
+class IddField:
+    """A single field definition from an IDD object."""
+
+    name: str
+    field_id: str = ""  # "A1", "N2", etc.
+    field_type: str = ""  # "alpha", "real", "integer", "choice", "node", "object-list", "external-list"
+    units: str = ""
+    ip_units: str = ""
+    default: str = ""
+    minimum: str = ""
+    minimum_exclusive: bool = False
+    maximum: str = ""
+    maximum_exclusive: bool = False
+    required: bool = False
+    autosizable: bool = False
+    autocalculatable: bool = False
+    keys: list[str] = field(default_factory=list)
+    notes: str = ""
+
+
+@dataclass
+class IddObject:
+    """An IDF object definition from the IDD file."""
+
+    name: str
+    memo: str = ""
+    fields: list[IddField] = field(default_factory=list)
+    fields_by_name: dict[str, IddField] = field(default_factory=dict, repr=False)

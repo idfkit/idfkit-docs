@@ -33,9 +33,10 @@ from scripts.config import (
     IMAGE_EXTENSIONS,
     version_to_title,
 )
+from scripts.idd_parser import parse_idd
 from scripts.latex_preprocessor import preprocess
 from scripts.markdown_postprocessor import postprocess
-from scripts.models import ConversionResult, DocSet, DocSetResult, LabelRef, VersionResult
+from scripts.models import ConversionResult, DocSet, DocSetResult, IddObject, LabelRef, VersionResult
 from scripts.nav_generator import extract_heading, generate_nav, parse_input_chain
 
 logger = logging.getLogger(__name__)
@@ -294,6 +295,7 @@ def convert_tex_file(
     doc_set_title: str = "",
     current_md_path: str = "",
     figure_numbers: list[int] | None = None,
+    idd_index: dict[str, IddObject] | None = None,
 ) -> ConversionResult:
     """Convert a single .tex file to Markdown via preprocessing -> Pandoc -> postprocessing."""
     warnings: list[str] = []
@@ -362,6 +364,7 @@ def convert_tex_file(
             rel_depth=rel_depth,
             current_md_path=current_md_path,
             figure_numbers=figure_numbers,
+            idd_index=idd_index,
         )
 
         # Write output
@@ -462,6 +465,7 @@ def _convert_files(
     label_index: dict[str, LabelRef],
     max_workers: int,
     file_figure_numbers: dict[str, list[int]] | None = None,
+    idd_index: dict[str, IddObject] | None = None,
 ) -> list[tuple[str, ConversionResult]]:
     """Run file conversions, using a thread pool when *max_workers* > 1."""
     if file_figure_numbers is None:
@@ -480,6 +484,7 @@ def _convert_files(
                     doc_set_title,
                     current_md_path,
                     file_figure_numbers.get(current_md_path),
+                    idd_index,
                 ): inp
                 for inp, tex_path, output_path, rel_depth, current_md_path in tasks
             }
@@ -499,6 +504,7 @@ def _convert_files(
                     doc_set_title=doc_set_title,
                     current_md_path=current_md_path,
                     figure_numbers=file_figure_numbers.get(current_md_path),
+                    idd_index=idd_index,
                 ),
             ))
     return converted
@@ -538,6 +544,7 @@ def convert_doc_set(
     *,
     max_workers: int = 1,
     file_figure_numbers: dict[str, list[int]] | None = None,
+    idd_index: dict[str, IddObject] | None = None,
 ) -> DocSetResult:
     """Convert all files in a doc set.
 
@@ -553,7 +560,9 @@ def convert_doc_set(
     tasks = _collect_tasks(inputs, doc_set, output_dir, parent_children, result)
 
     # Phase 1: Convert files (parallel when max_workers > 1)
-    converted = _convert_files(tasks, doc_set.slug, doc_set.title, label_index, max_workers, file_figure_numbers)
+    converted = _convert_files(
+        tasks, doc_set.slug, doc_set.title, label_index, max_workers, file_figure_numbers, idd_index
+    )
 
     # Phase 2: Log results and append TOCs (must happen after files are written)
     for inp, file_result in converted:
@@ -650,7 +659,7 @@ def generate_zensical_config(
         {"path": "https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js", "async": True},
         {"path": "assets/eq-tooltips.js"},
     ]
-    project["extra_css"] = ["assets/eq-tooltips.css"]
+    project["extra_css"] = ["assets/eq-tooltips.css", "assets/idf-fields.css"]
 
     config_path = output_dir / "zensical.toml"
     config_path.write_text(tomli_w.dumps(config))
@@ -720,11 +729,26 @@ def convert_version(
     # Build label index across all doc sets
     label_index, file_figure_numbers = build_label_index(source_dir, doc_sets)
 
+    # Parse IDD for structured field metadata (IO Reference only)
+    idd_index: dict[str, IddObject] | None = None
+    idd_path = source_dir / "idd" / "Energy+.idd.in"
+    if idd_path.exists():
+        idd_index = parse_idd(idd_path.read_text(errors="replace"))
+    else:
+        logger.warning("IDD file not found at %s, field metadata will not be injected", idd_path)
+
     # Convert each doc set
     for ds in doc_sets:
         logger.info("Converting doc set: %s", ds.title)
+        # Only pass IDD index for IO Reference doc set (contains IDF object field docs)
+        ds_idd = idd_index if ds.slug == "io-reference" else None
         ds_result = convert_doc_set(
-            ds, output_dir, label_index, max_workers=max_workers, file_figure_numbers=file_figure_numbers
+            ds,
+            output_dir,
+            label_index,
+            max_workers=max_workers,
+            file_figure_numbers=file_figure_numbers,
+            idd_index=ds_idd,
         )
         result.doc_set_results.append(ds_result)
         logger.info(

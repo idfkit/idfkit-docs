@@ -18,7 +18,7 @@ import html
 import posixpath
 import re
 
-from scripts.models import LabelRef
+from scripts.models import IddField, IddObject, LabelRef
 
 # Map PDF filenames used in \href{...} to their doc-set URL slugs.
 # These are inter-doc-set cross-references left over from the original
@@ -394,6 +394,122 @@ def clean_div_wrappers(text: str) -> str:
     return "\n".join(result)
 
 
+_IDD_TYPE_LABELS = {
+    "real": "Real",
+    "integer": "Integer",
+    "alpha": "Alpha",
+    "choice": "Choice",
+    "node": "Node",
+    "object-list": "Object-List",
+    "external-list": "External-List",
+}
+
+
+def _pill(css_class: str, label: str, value: str = "") -> str:
+    """Build an HTML span pill/badge."""
+    if value:
+        return f'<span class="field-pill {css_class}"><span class="pill-label">{label}</span> {value}</span>'
+    return f'<span class="field-pill {css_class}">{label}</span>'
+
+
+def _format_range(field: IddField) -> str:
+    """Format min/max range constraints as a readable string."""
+    parts: list[str] = []
+    if field.minimum:
+        op = "&gt;" if field.minimum_exclusive else "\u2265"  # > or ≥
+        parts.append(f"{op}\u2009{field.minimum}")
+    if field.maximum:
+        op = "&lt;" if field.maximum_exclusive else "\u2264"  # < or ≤
+        parts.append(f"{op}\u2009{field.maximum}")
+    return ", ".join(parts)
+
+
+def _format_field_attrs(field: IddField) -> str:
+    """Build inline pill/badge HTML for a field's metadata."""
+    pills: list[str] = []
+
+    if field.field_type:
+        type_label = _IDD_TYPE_LABELS.get(field.field_type, field.field_type.title())
+        pills.append(_pill("pill-type", type_label))
+
+    if field.units:
+        unit_str = f"{field.units} / {field.ip_units}" if field.ip_units else field.units
+        pills.append(_pill("pill-units", unit_str))
+
+    if field.default:
+        pills.append(_pill("pill-default", "Default:", field.default))
+
+    range_str = _format_range(field)
+    if range_str:
+        pills.append(_pill("pill-range", "Range:", range_str))
+
+    if field.required:
+        pills.append(_pill("pill-flag pill-required", "Required"))
+    if field.autosizable:
+        pills.append(_pill("pill-flag", "Autosizable"))
+    if field.autocalculatable:
+        pills.append(_pill("pill-flag", "Autocalculatable"))
+
+    if not pills:
+        return ""
+
+    lines = ['<div class="field-pills">']
+    lines.append(" ".join(pills))
+
+    # Choices get their own line since they can be long
+    if field.keys:
+        choice_spans = " ".join(f'<code class="pill-choice">{k}</code>' for k in field.keys)
+        lines.append(f'<div class="field-choices">{choice_spans}</div>')
+
+    lines.append("</div>")
+    return "\n".join(lines)
+
+
+def inject_field_metadata(text: str, idd_index: dict[str, IddObject]) -> str:
+    """Inject structured metadata blocks after #### Field: headings using IDD data.
+
+    Scans the markdown for heading patterns to determine the current IDF object,
+    then looks up field metadata from the IDD index and inserts styled attribute
+    blocks after each field heading.
+    """
+    lines = text.split("\n")
+    result: list[str] = []
+    current_object: IddObject | None = None
+
+    # Heading patterns
+    # Object headings: # ObjectName or ## ObjectName (for group pages)
+    h1_pattern = re.compile(r"^(#{1,3})\s+(.+)$")
+    # Field headings: #### Field: FieldName
+    field_pattern = re.compile(r"^####\s+Field:\s*(.+)$")
+
+    for line in lines:
+        result.append(line)
+
+        # Check for object-level headings (h1, h2, h3) that match an IDD object
+        h_match = h1_pattern.match(line)
+        if h_match:
+            heading_text = h_match.group(2).strip()
+            # Strip any Pandoc attributes like {#id .class}
+            heading_text = re.sub(r"\s*\{[#.][^}]*\}", "", heading_text).strip()
+            if heading_text in idd_index:
+                current_object = idd_index[heading_text]
+            continue
+
+        # Check for field headings
+        field_match = field_pattern.match(line)
+        if field_match and current_object:
+            field_name = field_match.group(1).strip()
+            # Look up field in current object (case-insensitive)
+            idd_field = current_object.fields_by_name.get(field_name.lower())
+            if idd_field:
+                attrs_block = _format_field_attrs(idd_field)
+                if attrs_block:
+                    result.append("")
+                    result.append(attrs_block)
+
+    return "\n".join(result)
+
+
 def postprocess(
     text: str,
     title: str | None = None,
@@ -403,6 +519,7 @@ def postprocess(
     rel_depth: int = 0,
     current_md_path: str = "",
     figure_numbers: list[int] | None = None,
+    idd_index: dict[str, IddObject] | None = None,
 ) -> str:
     """Apply all postprocessing transformations in the correct order."""
     if label_index is None:
@@ -424,6 +541,8 @@ def postprocess(
     text = fix_heading_dashes(text)
     text = clean_empty_links(text)
     text = clean_div_wrappers(text)
+    if idd_index:
+        text = inject_field_metadata(text, idd_index)
     text = add_front_matter(text, title, doc_set_title=doc_set_title)
 
     return text

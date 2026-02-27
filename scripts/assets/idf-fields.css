@@ -1,0 +1,90 @@
+/* Inline pill/badge styling for IDF field metadata.
+ * Appears directly after #### Field: headings in the IO Reference.
+ * Metadata is extracted from the EnergyPlus IDD file.
+ */
+
+/* Container */
+.field-pills {
+  margin: 0.2em 0 0.5em 0;
+  line-height: 2;
+}
+
+/* Base pill style */
+.field-pill {
+  display: inline-block;
+  font-size: 0.75em;
+  padding: 0.15em 0.55em;
+  border-radius: 999px;
+  font-family: var(--md-code-font-family, monospace);
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+
+.field-pill .pill-label {
+  opacity: 0.65;
+  font-weight: 400;
+}
+
+/* Type pill — primary accent */
+.field-pill.pill-type {
+  background: var(--md-accent-fg-color);
+  color: var(--md-accent-bg-color, #fff);
+  font-weight: 600;
+}
+
+/* Units pill */
+.field-pill.pill-units {
+  background: var(--md-code-bg-color);
+  color: var(--md-code-fg-color);
+  border: 1px solid var(--md-default-fg-color--lightest);
+}
+
+/* Default pill */
+.field-pill.pill-default {
+  background: var(--md-code-bg-color);
+  color: var(--md-code-fg-color);
+  border: 1px solid var(--md-default-fg-color--lightest);
+}
+
+/* Range pill */
+.field-pill.pill-range {
+  background: var(--md-code-bg-color);
+  color: var(--md-code-fg-color);
+  border: 1px solid var(--md-default-fg-color--lightest);
+}
+
+/* Flag pills (Required, Autosizable, etc.) */
+.field-pill.pill-flag {
+  background: var(--md-code-bg-color);
+  color: var(--md-default-fg-color--light);
+  border: 1px solid var(--md-default-fg-color--lightest);
+  font-style: italic;
+}
+
+.field-pill.pill-required {
+  background: hsla(15, 80%, 55%, 0.12);
+  color: hsl(15, 70%, 45%);
+  border-color: hsla(15, 70%, 55%, 0.3);
+  font-weight: 600;
+  font-style: normal;
+}
+
+/* Dark mode override for Required */
+[data-md-color-scheme="slate"] .field-pill.pill-required {
+  background: hsla(15, 80%, 55%, 0.18);
+  color: hsl(15, 70%, 65%);
+  border-color: hsla(15, 70%, 55%, 0.35);
+}
+
+/* Choices row */
+.field-choices {
+  margin-top: 0.15em;
+  line-height: 1.9;
+}
+
+.field-choices code.pill-choice {
+  font-size: 0.8em;
+  padding: 0.1em 0.4em;
+  border-radius: 3px;
+  margin-right: 0.2em;
+}

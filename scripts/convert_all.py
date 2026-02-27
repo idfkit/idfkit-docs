@@ -37,7 +37,7 @@ def clone_version(version: str, clone_dir: Path) -> Path:
     Returns the path to the cloned repo.
     """
     target = clone_dir / version
-    if target.exists() and (target / "doc").exists():
+    if target.exists() and (target / "doc").exists() and (target / "idd").exists():
         logger.info("Source for %s already exists, reusing", version)
         return target
 
@@ -67,7 +67,7 @@ def clone_version(version: str, clone_dir: Path) -> Path:
         text=True,
     )
     subprocess.run(
-        ["git", "-C", str(target), "sparse-checkout", "set", "doc"],
+        ["git", "-C", str(target), "sparse-checkout", "set", "doc", "idd"],
         check=True,
         capture_output=True,
     )
