@@ -1,0 +1,32 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dev-v25.2",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "zensical",
+        "serve",
+        "-a",
+        "localhost:8123"
+      ],
+      "cwd": "build/v25.2",
+      "port": 8123
+    },
+    {
+      "name": "serve-dist",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": [
+        "run",
+        "python",
+        "-m",
+        "http.server",
+        "8003",
+        "--directory",
+        "dist"
+      ],
+      "port": 8003
+    }
+  ]
+}
