@@ -18,10 +18,10 @@ import { getCurrentTheme, THEME_DARK, THEME_LIGHT } from './idf-themes';
 const MIN_HEIGHT = 60;
 /** Maximum editor height before scrolling (40 lines) */
 const MAX_HEIGHT = 720;
-/** Line height for height calculation */
-const LINE_HEIGHT = 18;
-/** Padding (top + bottom) */
-const PADDING = 16;
+/** Line height for height calculation (matches fontSize 13) */
+const LINE_HEIGHT = 19;
+/** Padding (top + bottom, matches Monaco padding option) */
+const PADDING = 20;
 /** IntersectionObserver rootMargin for pre-loading */
 const PRELOAD_MARGIN = '200px';
 
@@ -146,7 +146,7 @@ export class EditorManager {
       lineNumbers: 'on',
       scrollBeyondLastLine: false,
       wordWrap: 'off',
-      folding: true,
+      folding: false,
       glyphMargin: false,
       lineDecorationsWidth: 0,
       lineNumbersMinChars: 3,

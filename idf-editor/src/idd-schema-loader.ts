@@ -69,12 +69,17 @@ export function clearSchema(): void {
 /**
  * Resolve the URL for the IDD schema JSON.
  *
- * The schema lives at assets/idd-schema.json relative to the site root
- * for the current version. We compute this from the page's base URL.
+ * The schema lives alongside the idf-editor.js script in the assets/ directory.
+ * We derive the URL from the script's own src attribute so it works regardless
+ * of the current page path (deep links, multi-version deployment, etc.).
  */
 function resolveSchemaUrl(): string {
-  // Try to find a <base> tag or use the current location
-  const base = document.querySelector('base')?.href || window.location.href;
-  const url = new URL('assets/idd-schema.json', base);
-  return url.href;
+  // Find our own script tag and resolve relative to it
+  const script = document.querySelector('script[src*="idf-editor"]');
+  if (script) {
+    const scriptSrc = (script as HTMLScriptElement).src;
+    return new URL('idd-schema.json', scriptSrc).href;
+  }
+  // Fallback: absolute path from site root
+  return new URL('/assets/idd-schema.json', window.location.origin).href;
 }

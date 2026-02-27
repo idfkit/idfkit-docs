@@ -13,7 +13,6 @@ import { EditorManager, loadMonacoFromCDN } from './editor-manager';
 import { idfLanguageConfiguration, idfTokensProvider, IDF_LANGUAGE_ID } from './idf-language';
 import { registerIDFThemes } from './idf-themes';
 import { registerHoverProvider } from './idf-hover-service';
-import { registerFoldingProvider } from './idf-folding-provider';
 import { getSchema, loadSchema } from './idd-schema-loader';
 import type * as Monaco from 'monaco-editor';
 
@@ -45,9 +44,6 @@ function registerLanguage(monaco: typeof Monaco): void {
 
   // Register hover provider (schema may not be loaded yet; getSchema returns null until it is)
   registerHoverProvider(monaco, getSchema);
-
-  // Register folding provider
-  registerFoldingProvider(monaco);
 
   languageRegistered = true;
 }
