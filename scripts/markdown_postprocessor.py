@@ -470,11 +470,13 @@ def inject_field_metadata(text: str, idd_index: dict[str, IddObject]) -> str:
 
     Scans the markdown for heading patterns to determine the current IDF object,
     then looks up field metadata from the IDD index and inserts styled attribute
-    blocks after each field heading.
+    blocks after each field heading.  Also inserts ``<hr>`` separators between
+    consecutive IDF objects so long group pages are visually segmented.
     """
     lines = text.split("\n")
     result: list[str] = []
     current_object: IddObject | None = None
+    seen_first_object = False
 
     # Heading patterns
     # Object headings: # ObjectName or ## ObjectName (for group pages)
@@ -483,8 +485,6 @@ def inject_field_metadata(text: str, idd_index: dict[str, IddObject]) -> str:
     field_pattern = re.compile(r"^####\s+Field:\s*(.+)$")
 
     for line in lines:
-        result.append(line)
-
         # Check for object-level headings (h1, h2, h3) that match an IDD object
         h_match = h1_pattern.match(line)
         if h_match:
@@ -492,8 +492,17 @@ def inject_field_metadata(text: str, idd_index: dict[str, IddObject]) -> str:
             # Strip any Pandoc attributes like {#id .class}
             heading_text = re.sub(r"\s*\{[#.][^}]*\}", "", heading_text).strip()
             if heading_text in idd_index:
+                # Insert a visual separator between objects (skip the first)
+                if seen_first_object:
+                    result.append("")
+                    result.append('<hr class="idf-object-separator">')
+                    result.append("")
+                seen_first_object = True
                 current_object = idd_index[heading_text]
+            result.append(line)
             continue
+
+        result.append(line)
 
         # Check for field headings
         field_match = field_pattern.match(line)

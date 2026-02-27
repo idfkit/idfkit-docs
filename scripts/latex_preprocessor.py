@@ -146,34 +146,42 @@ _BRACKET_MACROS = {
 }
 
 
+_BRACKET_MACRO_RE = re.compile(r"\\(?:PB|RB|CB)\{")
+
+
 def _expand_all_bracket_macros(text: str) -> str:
     r"""Expand all ``\PB``, ``\RB``, ``\CB`` macros in *text*, inside-out.
 
     When an outer macro wraps inner macros (e.g. ``\PB{a \PB{b}}``) the
     inner content is recursively expanded first, so the final result
     contains no bracket macros regardless of nesting depth.
+
+    Uses regex to jump to the next macro occurrence instead of scanning
+    every character, which is critical for large files.
     """
     result: list[str] = []
-    i = 0
-    while i < len(text):
-        matched_macro = None
-        for macro in _BRACKET_MACROS:
-            if text[i:].startswith(macro + "{"):
-                matched_macro = macro
-                break
-        if matched_macro:
-            brace_start = i + len(matched_macro)
-            found = _find_brace_content(text, brace_start)
-            if found:
-                content, end = found
-                # Recursively expand any bracket macros inside the content
-                content = _expand_all_bracket_macros(content)
-                left, right = _BRACKET_MACROS[matched_macro]
-                result.append(f"{left} {content} {right}")
-                i = end
-                continue
-        result.append(text[i])
-        i += 1
+    pos = 0
+    while True:
+        m = _BRACKET_MACRO_RE.search(text, pos)
+        if m is None:
+            result.append(text[pos:])
+            break
+        # Append everything before this macro
+        result.append(text[pos : m.start()])
+        macro = text[m.start() : m.end() - 1]  # e.g. "\\PB"
+        brace_start = m.end() - 1  # position of the '{'
+        found = _find_brace_content(text, brace_start)
+        if found:
+            content, end = found
+            # Recursively expand any bracket macros inside the content
+            content = _expand_all_bracket_macros(content)
+            left, right = _BRACKET_MACROS[macro]
+            result.append(f"{left} {content} {right}")
+            pos = end
+        else:
+            # Unbalanced brace — emit macro text literally and continue
+            result.append(text[m.start() : m.end()])
+            pos = m.end()
     return "".join(result)
 
 
