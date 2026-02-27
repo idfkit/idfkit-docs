@@ -12,7 +12,7 @@ export default defineConfig({
     outDir: path.resolve(__dirname, 'dist'),
     cssFileName: 'idf-editor',
     minify: 'esbuild',
-    sourcemap: true,
+    sourcemap: false,
     rollupOptions: {
       output: {
         assetFileNames: 'idf-editor.[ext]',

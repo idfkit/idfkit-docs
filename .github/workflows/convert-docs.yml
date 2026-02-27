@@ -80,6 +80,12 @@ jobs:
           cd idf-editor && npm ci --silent && npm run build
           cp dist/idf-editor.js dist/idf-editor.css ../scripts/assets/
 
+      - name: Compute short version
+        id: short
+        run: |
+          SHORT=$(uv run python -c "from scripts.config import version_to_short; print(version_to_short('${{ matrix.version }}'))")
+          echo "version_short=${SHORT}" >> "$GITHUB_OUTPUT"
+
       - name: Compute cache key
         id: cache-key
         run: |
@@ -91,14 +97,8 @@ jobs:
         if: ${{ !inputs.force_rebuild }}
         uses: actions/cache@v4
         with:
-          path: build/${{ matrix.version_short }}
+          path: build/${{ steps.short.outputs.version_short }}
           key: ${{ steps.cache-key.outputs.key }}
-
-      - name: Compute short version
-        id: short
-        run: |
-          SHORT=$(uv run python -c "from scripts.config import version_to_short; print(version_to_short('${{ matrix.version }}'))")
-          echo "version_short=${SHORT}" >> "$GITHUB_OUTPUT"
 
       - name: Clone EnergyPlus source (sparse, doc/ + idd/)
         if: steps.cache.outputs.cache-hit != 'true'

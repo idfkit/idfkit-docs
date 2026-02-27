@@ -26,7 +26,7 @@ const PADDING = 20;
 const PRELOAD_MARGIN = '200px';
 
 /** Monaco editor version to load from CDN */
-const MONACO_VERSION = '0.52.2';
+const MONACO_VERSION = '0.55.1';
 const MONACO_CDN_BASE = `https://cdn.jsdelivr.net/npm/monaco-editor@${MONACO_VERSION}/min/vs`;
 
 /** Copy icon SVG */
