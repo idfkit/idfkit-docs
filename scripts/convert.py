@@ -653,6 +653,43 @@ def generate_zensical_config(
     # Tags for cmd-k search filtering
     extra["tags"] = {ds.title: ds.slug for ds in doc_sets}
 
+    # Markdown extensions — specify explicitly so we don't lose Zensical's
+    # defaults (superfences, highlight, etc.) when adding our overrides.
+    # Omitting this from zensical.toml would work for `make docs-test`, but
+    # since we need toc_depth=4 and arithmatex, we must list everything.
+    project["markdown_extensions"] = {
+        "abbr": {},
+        "admonition": {},
+        "attr_list": {},
+        "def_list": {},
+        "footnotes": {},
+        "md_in_html": {},
+        "toc": {"permalink": True, "toc_depth": 4},
+        "pymdownx.arithmatex": {"generic": True},
+        "pymdownx.betterem": {},
+        "pymdownx.caret": {},
+        "pymdownx.details": {},
+        "pymdownx.highlight": {
+            "anchor_linenums": True,
+            "line_spans": "__span",
+            "pygments_lang_class": True,
+        },
+        "pymdownx.inlinehilite": {},
+        "pymdownx.keys": {},
+        "pymdownx.magiclink": {},
+        "pymdownx.mark": {},
+        "pymdownx.smartsymbols": {},
+        "pymdownx.superfences": {
+            "custom_fences": [{"name": "mermaid", "class": "mermaid"}],
+        },
+        "pymdownx.tabbed": {
+            "alternate_style": True,
+            "combine_header_slug": True,
+        },
+        "pymdownx.tasklist": {"custom_checkbox": True},
+        "pymdownx.tilde": {},
+    }
+
     # MathJax with equation numbering + equation tooltips + IDF editor
     project["extra_javascript"] = [
         {"path": "assets/mathjax-config.js"},
