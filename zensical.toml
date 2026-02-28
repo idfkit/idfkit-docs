@@ -19,6 +19,7 @@ features = [
     "navigation.footer",
     "navigation.tracking",
     "content.code.copy",
+    "toc.follow",
 ]
 
 [project.theme.icon]

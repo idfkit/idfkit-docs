@@ -5,7 +5,7 @@ from __future__ import annotations
 # Target EnergyPlus versions to convert (oldest to newest)
 TARGET_VERSIONS: list[str] = [
     "v8.9.0",
-    "v9.0.0",
+    "v9.0.1",
     "v9.1.0",
     "v9.2.0",
     "v9.3.0",

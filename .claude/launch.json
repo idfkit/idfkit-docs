@@ -1,0 +1,35 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "zensical-dev",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "cd build/v25.2 && uv run zensical serve -a localhost:$PORT"
+      ],
+      "port": 8000,
+      "autoPort": true
+    },
+    {
+      "name": "dist-server",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "uv run python -m http.server $PORT --directory dist"
+      ],
+      "port": 8003,
+      "autoPort": true
+    },
+    {
+      "name": "idf-editor-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "cwd": "idf-editor",
+      "port": 5173
+    }
+  ]
+}

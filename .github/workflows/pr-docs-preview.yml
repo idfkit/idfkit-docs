@@ -34,6 +34,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y pandoc
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: idf-editor/package-lock.json
+
+      - name: Build IDF editor bundle
+        run: |
+          cd idf-editor && npm ci --silent && npm run build
+          cp dist/idf-editor.js dist/idf-editor.css ../scripts/assets/
+
       - name: Determine latest version
         id: version
         run: |

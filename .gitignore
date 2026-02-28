@@ -28,5 +28,9 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
+# IDF editor build artifacts
+idf-editor/dist/
+idf-editor/node_modules/
+
 # Pre-commit cache
 .cache
