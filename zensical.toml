@@ -1,10 +1,16 @@
 [project]
 site_name = "idfkit-docs"
 site_url = "https://docs.idfkit.com"
-site_description = "EnergyPlus documentation built with Zensical"
+site_description = "Comprehensive EnergyPlus documentation — Input/Output Reference, Engineering Reference, and more. Searchable, hyperlinked, and covering all versions."
 site_author = "Samuel Letellier-Duchesne"
 copyright = "Maintained by <a href='https://samuelduchesne.com'>samuelduchesne</a>."
 repo_url = "https://github.com/idfkit/idfkit-docs"
+
+[project.plugins.meta]
+# Enables per-page meta description from YAML front matter
+
+[project.plugins.tags]
+# Enables tag-based navigation and filtering
 
 [project.theme]
 variant = "modern"

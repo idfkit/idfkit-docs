@@ -73,9 +73,47 @@ def fix_ordered_list_markers(text: str) -> str:
     return re.sub(r"^(\d+\.)\xa0", r"\1 ", text, flags=re.MULTILINE)
 
 
+def _extract_description(text: str, title: str, doc_set_title: str = "", max_len: int = 160) -> str:
+    """Extract a meta description from the first meaningful paragraph of text.
+
+    Skips headings, blank lines, admonitions, and code fences to find the first
+    real paragraph.  Falls back to a constructed description from title + doc set.
+    """
+    for line in text.split("\n"):
+        stripped = line.strip()
+        # Skip blanks, headings, admonitions, fences, HTML, front-matter markers
+        if (
+            not stripped
+            or stripped.startswith("#")
+            or stripped.startswith("!!!")
+            or stripped.startswith("```")
+            or stripped.startswith("<")
+            or stripped.startswith("---")
+            or stripped.startswith("| ")
+        ):
+            continue
+        # Remove markdown links but keep text
+        desc = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", stripped)
+        # Remove inline code backticks
+        desc = desc.replace("`", "")
+        # Remove bold/italic markers
+        desc = re.sub(r"\*{1,2}([^*]+)\*{1,2}", r"\1", desc)
+        if len(desc) > max_len:
+            desc = desc[: max_len - 3].rsplit(" ", 1)[0] + "..."
+        return desc
+
+    # Fallback
+    if doc_set_title:
+        return f"EnergyPlus {doc_set_title} — {title}"
+    return f"EnergyPlus documentation — {title}"
+
+
 def add_front_matter(text: str, title: str, doc_set_title: str = "") -> str:
-    """Add YAML front matter with title and tags."""
-    lines = ["---", f"title: {title}"]
+    """Add YAML front matter with title, description, and tags."""
+    description = _extract_description(text, title, doc_set_title)
+    # Escape any YAML-special characters in the description
+    safe_desc = description.replace('"', '\\"')
+    lines = ["---", f"title: {title}", f'description: "{safe_desc}"']
     if doc_set_title:
         lines.append("tags:")
         lines.append(f"  - {doc_set_title}")
