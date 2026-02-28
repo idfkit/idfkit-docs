@@ -318,7 +318,7 @@ def generate_sitemap(output_dir: Path, versions: list[str]) -> Path:
             import xml.etree.ElementTree as ET
 
             try:
-                tree = ET.parse(version_sitemap)
+                tree = ET.parse(version_sitemap)  # noqa: S314 - trusted build output
                 ns = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
                 for url_el in tree.findall(".//sm:url", ns):
                     loc_el = url_el.find("sm:loc", ns)
@@ -340,9 +340,7 @@ def generate_sitemap(output_dir: Path, versions: list[str]) -> Path:
 
     sitemap = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-        + "\n".join(urls)
-        + "\n</urlset>\n"
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + "\n".join(urls) + "\n</urlset>\n"
     )
 
     output_path = output_dir / "sitemap.xml"
