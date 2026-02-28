@@ -335,8 +335,8 @@ def generate_sitemap(output_dir: Path, versions: list[str]) -> Path:
                             f"    <priority>{priority}</priority>\n"
                             f"  </url>"
                         )
-            except ET.ParseError:
-                pass  # Skip malformed sitemaps
+            except ET.ParseError as e:
+                print(f"Warning: Could not parse {version_sitemap}: {e}")
 
     sitemap = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
