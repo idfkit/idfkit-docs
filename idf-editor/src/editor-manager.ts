@@ -241,14 +241,20 @@ export class EditorManager {
   }
 }
 
+/** Cached promise for Monaco loading (prevents duplicate loader injection) */
+let monacoLoadPromise: Promise<typeof Monaco> | null = null;
+
 /**
  * Load Monaco editor from CDN using the AMD loader.
  *
  * Returns the Monaco editor module. The loader and editor core are
- * cached by the browser across page navigations.
+ * cached by the browser across page navigations. The promise is
+ * cached so concurrent calls share the same load operation.
  */
 export function loadMonacoFromCDN(): Promise<typeof Monaco> {
-  return new Promise((resolve, reject) => {
+  if (monacoLoadPromise) return monacoLoadPromise;
+
+  monacoLoadPromise = new Promise((resolve, reject) => {
     // Check if Monaco is already loaded
     const win = window as Record<string, unknown>;
     if (win.monaco) {
@@ -269,6 +275,8 @@ export function loadMonacoFromCDN(): Promise<typeof Monaco> {
     script.onerror = () => reject(new Error('Failed to load Monaco AMD loader'));
     document.head.appendChild(script);
   });
+
+  return monacoLoadPromise;
 }
 
 function configureAndLoadMonaco(

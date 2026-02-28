@@ -22,6 +22,9 @@ let languageRegistered = false;
 /** Current editor manager (recreated on each page navigation) */
 let currentManager: EditorManager | null = null;
 
+/** Whether initPage() is currently running (prevents concurrent execution) */
+let initInProgress = false;
+
 /**
  * Register the IDF language, themes, and providers with Monaco.
  * Only done once globally (Monaco language registration is persistent).
@@ -53,23 +56,28 @@ function registerLanguage(monaco: typeof Monaco): void {
  * Called on initial load and after each instant navigation.
  */
 async function initPage(): Promise<void> {
-  // Dispose previous editors (from prior page)
-  if (currentManager) {
-    currentManager.dispose();
-    currentManager = null;
-  }
-
-  // Skip Monaco on narrow viewports — touch devices lack hover and the
-  // editors need horizontal space.  Pygments static highlighting remains.
-  if (window.innerWidth < 768) return;
-
-  // Check if there are IDF code blocks on this page.
-  // Zensical/pymdownx puts the language class on a wrapper <div>, not on <code>.
-  // Structure: <div class="language-idf highlight"><pre><code>...</code></pre></div>
-  const codeBlocks = document.querySelectorAll('div.language-idf pre > code');
-  if (codeBlocks.length === 0) return;
+  // Prevent concurrent execution (e.g. document$ ReplaySubject firing
+  // while the initial initPage() is still loading Monaco from CDN).
+  if (initInProgress) return;
+  initInProgress = true;
 
   try {
+    // Dispose previous editors (from prior page)
+    if (currentManager) {
+      currentManager.dispose();
+      currentManager = null;
+    }
+
+    // Skip Monaco on narrow viewports — touch devices lack hover and the
+    // editors need horizontal space.  Pygments static highlighting remains.
+    if (window.innerWidth < 768) return;
+
+    // Check if there are IDF code blocks on this page.
+    // Zensical/pymdownx puts the language class on a wrapper <div>, not on <code>.
+    // Structure: <div class="language-idf highlight"><pre><code>...</code></pre></div>
+    const codeBlocks = document.querySelectorAll('div.language-idf pre > code');
+    if (codeBlocks.length === 0) return;
+
     // Load Monaco from CDN (cached after first load)
     const monaco = await loadMonacoFromCDN();
 
@@ -84,6 +92,8 @@ async function initPage(): Promise<void> {
     currentManager.initialize(codeBlocks);
   } catch (error) {
     console.error('[idf-editor] Failed to initialize:', error);
+  } finally {
+    initInProgress = false;
   }
 }
 
@@ -97,7 +107,16 @@ function hookInstantNav(): boolean {
 
   if (!document$) return false;
 
+  // document$ is a ReplaySubject — it replays the last value on subscribe.
+  // Skip that initial emission since initPage() already handles the first load.
+  let firstEmission = true;
+
   document$.subscribe(() => {
+    if (firstEmission) {
+      firstEmission = false;
+      return;
+    }
+
     // Small delay to ensure the DOM is updated
     requestAnimationFrame(() => initPage());
   });
