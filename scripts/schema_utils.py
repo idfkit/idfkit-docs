@@ -179,22 +179,40 @@ def _build_doc_field(
     autosizable, autocalculatable = _detect_auto_flags(field_schema)
     idd_type = _resolve_idd_type(field_schema)
 
-    # Bounds
+    # Bounds -- older epJSON schemas (v8.9-v9.5) use boolean values for
+    # min/max (e.g. "minimum": true) instead of numeric bounds. The
+    # isinstance guards skip these so they don't break float() conversion.
     minimum_val = ""
     minimum_exclusive = False
     maximum_val = ""
     maximum_exclusive = False
 
-    if "exclusiveMinimum" in field_schema:
+    if (
+        "exclusiveMinimum" in field_schema
+        and isinstance(field_schema["exclusiveMinimum"], (int, float))
+        and not isinstance(field_schema["exclusiveMinimum"], bool)
+    ):
         minimum_val = str(field_schema["exclusiveMinimum"])
         minimum_exclusive = True
-    elif "minimum" in field_schema:
+    elif (
+        "minimum" in field_schema
+        and isinstance(field_schema["minimum"], (int, float))
+        and not isinstance(field_schema["minimum"], bool)
+    ):
         minimum_val = str(field_schema["minimum"])
 
-    if "exclusiveMaximum" in field_schema:
+    if (
+        "exclusiveMaximum" in field_schema
+        and isinstance(field_schema["exclusiveMaximum"], (int, float))
+        and not isinstance(field_schema["exclusiveMaximum"], bool)
+    ):
         maximum_val = str(field_schema["exclusiveMaximum"])
         maximum_exclusive = True
-    elif "maximum" in field_schema:
+    elif (
+        "maximum" in field_schema
+        and isinstance(field_schema["maximum"], (int, float))
+        and not isinstance(field_schema["maximum"], bool)
+    ):
         maximum_val = str(field_schema["maximum"])
 
     # Default
