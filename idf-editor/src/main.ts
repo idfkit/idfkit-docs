@@ -118,7 +118,14 @@ function hookInstantNav(): boolean {
     }
 
     // Small delay to ensure the DOM is updated
-    requestAnimationFrame(() => initPage());
+    requestAnimationFrame(() => {
+      // If our editors/pending blocks are still in the live DOM, Zensical
+      // did NOT replace the content (e.g. same-page anchor scroll).
+      // Re-initializing would destroy the working editors for nothing.
+      if (currentManager && currentManager.isStillInDOM()) return;
+
+      initPage();
+    });
   });
 
   return true;

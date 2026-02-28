@@ -87,6 +87,21 @@ export class EditorManager {
     this.watchThemeChanges();
   }
 
+  /**
+   * Check whether any tracked element (editor container or pending block)
+   * is still attached to the live document.  Returns false when Zensical's
+   * instant navigation has replaced the page content.
+   */
+  isStillInDOM(): boolean {
+    for (const { container } of this.editors) {
+      if (document.contains(container)) return true;
+    }
+    for (const [element] of this.pendingBlocks) {
+      if (document.contains(element)) return true;
+    }
+    return false;
+  }
+
   /** Dispose all editors and observers */
   dispose(): void {
     // Dispose editors
