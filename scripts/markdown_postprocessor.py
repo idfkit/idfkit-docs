@@ -19,6 +19,7 @@ import posixpath
 import re
 
 from scripts.models import LabelRef
+from scripts.schema_utils import DocFieldInfo, DocObjectInfo
 
 # Map PDF filenames used in \href{...} to their doc-set URL slugs.
 # These are inter-doc-set cross-references left over from the original
@@ -394,6 +395,127 @@ def clean_div_wrappers(text: str) -> str:
     return "\n".join(result)
 
 
+_IDD_TYPE_LABELS: dict[str, str] = {
+    "real": "Real",
+    "integer": "Integer",
+    "alpha": "Alpha",
+    "choice": "Choice",
+    "node": "Node",
+    "object-list": "Object-List",
+    "external-list": "External-List",
+}
+
+
+def _pill(css_class: str, label: str, value: str = "") -> str:
+    """Create a single HTML pill span."""
+    if value:
+        return f'<span class="field-pill {css_class}"><span class="pill-label">{label}</span> {value}</span>'
+    return f'<span class="field-pill {css_class}">{label}</span>'
+
+
+def _format_range(field: DocFieldInfo) -> str:
+    """Format min/max constraints as a compact range string."""
+    parts: list[str] = []
+    if field.minimum:
+        op = ">" if field.minimum_exclusive else "\u2265"
+        parts.append(f"{op} {field.minimum}")
+    if field.maximum:
+        op = "<" if field.maximum_exclusive else "\u2264"
+        parts.append(f"{op} {field.maximum}")
+    return ", ".join(parts)
+
+
+def _collect_field_pills(field: DocFieldInfo) -> list[str]:
+    """Collect the ordered list of HTML pill spans for a field."""
+    pills: list[str] = []
+
+    type_label = _IDD_TYPE_LABELS.get(field.field_type)
+    if type_label:
+        pills.append(_pill("pill-type", type_label))
+
+    if field.units:
+        units_text = field.units
+        if field.ip_units:
+            units_text += f" ({field.ip_units})"
+        pills.append(_pill("pill-units", "Units:", units_text))
+
+    if field.default:
+        pills.append(_pill("pill-default", "Default:", field.default))
+
+    range_str = _format_range(field)
+    if range_str:
+        pills.append(_pill("pill-range", "Range:", range_str))
+
+    # Flag pills
+    for flag, css, label in [
+        (field.required, "pill-required pill-flag", "Required"),
+        (field.autosizable, "pill-flag", "Autosizable"),
+        (field.autocalculatable, "pill-flag", "Autocalculatable"),
+    ]:
+        if flag:
+            pills.append(_pill(css, label))
+
+    return pills
+
+
+def _format_field_attrs(field: DocFieldInfo) -> str:
+    """Build the HTML pill badges for a single field."""
+    pills = _collect_field_pills(field)
+
+    result_parts: list[str] = []
+    if pills:
+        result_parts.append(f'<div class="field-pills">{" ".join(pills)}</div>')
+
+    if field.keys:
+        choices_html = " ".join(f'<code class="pill-choice">{k}</code>' for k in field.keys)
+        result_parts.append(f'<div class="field-choices">{choices_html}</div>')
+
+    return "\n".join(result_parts)
+
+
+def inject_field_metadata(text: str, object_index: dict[str, DocObjectInfo]) -> str:
+    """Inject structured metadata blocks after ``#### Field:`` headings using schema data.
+
+    Scans through the markdown line by line, tracks the current IDD object based
+    on h1-h3 headings, and for each ``#### Field: <name>`` heading, looks up the
+    corresponding field metadata and appends inline HTML pills.
+    """
+    lines = text.split("\n")
+    result: list[str] = []
+    current_object: DocObjectInfo | None = None
+
+    heading_re = re.compile(r"^(#{1,3})\s+(.+)$")
+    field_re = re.compile(r"^####\s+Field:\s*(.+)$")
+
+    for line in lines:
+        result.append(line)
+
+        # Track current IDD object from h1-h3 headings
+        h_match = heading_re.match(line)
+        if h_match:
+            heading_text = h_match.group(2).strip()
+            # Strip Pandoc attributes like {#id .class}
+            heading_text = re.sub(r"\s*\{[#.][^}]*\}", "", heading_text).strip()
+            if heading_text in object_index:
+                current_object = object_index[heading_text]
+
+        # Inject pills after #### Field: headings
+        if current_object:
+            f_match = field_re.match(line)
+            if f_match:
+                field_name = f_match.group(1).strip()
+                # Strip Pandoc attributes
+                field_name = re.sub(r"\s*\{[#.][^}]*\}", "", field_name).strip()
+                idd_field = current_object.fields_by_display_name.get(field_name.lower())
+                if idd_field:
+                    pills_html = _format_field_attrs(idd_field)
+                    if pills_html:
+                        result.append("")
+                        result.append(pills_html)
+
+    return "\n".join(result)
+
+
 def postprocess(
     text: str,
     title: str | None = None,
@@ -403,6 +525,7 @@ def postprocess(
     rel_depth: int = 0,
     current_md_path: str = "",
     figure_numbers: list[int] | None = None,
+    object_index: dict[str, DocObjectInfo] | None = None,
 ) -> str:
     """Apply all postprocessing transformations in the correct order."""
     if label_index is None:
@@ -424,6 +547,8 @@ def postprocess(
     text = fix_heading_dashes(text)
     text = clean_empty_links(text)
     text = clean_div_wrappers(text)
+    if object_index:
+        text = inject_field_metadata(text, object_index)
     text = add_front_matter(text, title, doc_set_title=doc_set_title)
 
     return text

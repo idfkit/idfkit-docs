@@ -75,10 +75,28 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y pandoc
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: idf-editor/package-lock.json
+
+      - name: Build IDF editor bundle
+        run: |
+          cd idf-editor && npm ci --silent && npm run build
+          cp dist/idf-editor.js dist/idf-editor.css ../scripts/assets/
+
+      - name: Compute short version
+        id: short
+        run: |
+          SHORT=$(uv run python -c "from scripts.config import version_to_short; print(version_to_short('${{ matrix.version }}'))")
+          echo "version_short=${SHORT}" >> "$GITHUB_OUTPUT"
+
       - name: Compute cache key
         id: cache-key
         run: |
-          SCRIPTS_HASH=$(find scripts/ -type f -name '*.py' -o -name '*.lua' | sort | xargs sha256sum | sha256sum | cut -d' ' -f1)
+          SCRIPTS_HASH=$(find scripts/ idf-editor/src/ -type f \( -name '*.py' -o -name '*.lua' -o -name '*.ts' -o -name '*.css' \) | sort | xargs sha256sum | sha256sum | cut -d' ' -f1)
           echo "key=docs-${{ matrix.version }}-${SCRIPTS_HASH}" >> "$GITHUB_OUTPUT"
 
       - name: Cache built version
@@ -86,14 +104,8 @@ jobs:
         if: ${{ !inputs.force_rebuild }}
         uses: actions/cache@v4
         with:
-          path: build/${{ matrix.version_short }}
+          path: build/${{ steps.short.outputs.version_short }}
           key: ${{ steps.cache-key.outputs.key }}
-
-      - name: Compute short version
-        id: short
-        run: |
-          SHORT=$(uv run python -c "from scripts.config import version_to_short; print(version_to_short('${{ matrix.version }}'))")
-          echo "version_short=${SHORT}" >> "$GITHUB_OUTPUT"
 
       - name: Clone EnergyPlus source (sparse, doc/ only)
         if: steps.cache.outputs.cache-hit != 'true'

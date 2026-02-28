@@ -37,6 +37,7 @@ from scripts.latex_preprocessor import preprocess
 from scripts.markdown_postprocessor import postprocess
 from scripts.models import ConversionResult, DocSet, DocSetResult, LabelRef, VersionResult
 from scripts.nav_generator import extract_heading, generate_nav, parse_input_chain
+from scripts.schema_utils import DocObjectInfo, build_object_index, serialize_for_monaco
 
 logger = logging.getLogger(__name__)
 
@@ -294,6 +295,7 @@ def convert_tex_file(
     doc_set_title: str = "",
     current_md_path: str = "",
     figure_numbers: list[int] | None = None,
+    object_index: dict[str, DocObjectInfo] | None = None,
 ) -> ConversionResult:
     """Convert a single .tex file to Markdown via preprocessing -> Pandoc -> postprocessing."""
     warnings: list[str] = []
@@ -362,6 +364,7 @@ def convert_tex_file(
             rel_depth=rel_depth,
             current_md_path=current_md_path,
             figure_numbers=figure_numbers,
+            object_index=object_index,
         )
 
         # Write output
@@ -462,6 +465,7 @@ def _convert_files(
     label_index: dict[str, LabelRef],
     max_workers: int,
     file_figure_numbers: dict[str, list[int]] | None = None,
+    object_index: dict[str, DocObjectInfo] | None = None,
 ) -> list[tuple[str, ConversionResult]]:
     """Run file conversions, using a thread pool when *max_workers* > 1."""
     if file_figure_numbers is None:
@@ -480,6 +484,7 @@ def _convert_files(
                     doc_set_title,
                     current_md_path,
                     file_figure_numbers.get(current_md_path),
+                    object_index,
                 ): inp
                 for inp, tex_path, output_path, rel_depth, current_md_path in tasks
             }
@@ -499,6 +504,7 @@ def _convert_files(
                     doc_set_title=doc_set_title,
                     current_md_path=current_md_path,
                     figure_numbers=file_figure_numbers.get(current_md_path),
+                    object_index=object_index,
                 ),
             ))
     return converted
@@ -538,6 +544,7 @@ def convert_doc_set(
     *,
     max_workers: int = 1,
     file_figure_numbers: dict[str, list[int]] | None = None,
+    object_index: dict[str, DocObjectInfo] | None = None,
 ) -> DocSetResult:
     """Convert all files in a doc set.
 
@@ -553,7 +560,9 @@ def convert_doc_set(
     tasks = _collect_tasks(inputs, doc_set, output_dir, parent_children, result)
 
     # Phase 1: Convert files (parallel when max_workers > 1)
-    converted = _convert_files(tasks, doc_set.slug, doc_set.title, label_index, max_workers, file_figure_numbers)
+    converted = _convert_files(
+        tasks, doc_set.slug, doc_set.title, label_index, max_workers, file_figure_numbers, object_index
+    )
 
     # Phase 2: Log results and append TOCs (must happen after files are written)
     for inp, file_result in converted:
@@ -644,13 +653,20 @@ def generate_zensical_config(
     # Tags for cmd-k search filtering
     extra["tags"] = {ds.title: ds.slug for ds in doc_sets}
 
-    # MathJax with equation numbering + equation tooltips
+    # MathJax with equation numbering + equation tooltips + IDF editor
     project["extra_javascript"] = [
         {"path": "assets/mathjax-config.js"},
         {"path": "https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-mml-chtml.js", "async": True},
         {"path": "assets/eq-tooltips.js"},
+        {"path": "assets/idf-editor.js", "defer": True},
     ]
-    project["extra_css"] = ["assets/eq-tooltips.css", "assets/figures.css"]
+    project["extra_css"] = [
+        "assets/eq-tooltips.css",
+        "assets/figures.css",
+        "assets/idf-fields.css",
+        "assets/idf-editor.css",
+        "assets/theme-overrides.css",
+    ]
 
     config_path = output_dir / "zensical.toml"
     config_path.write_text(tomli_w.dumps(config))
@@ -720,11 +736,27 @@ def convert_version(
     # Build label index across all doc sets
     label_index, file_figure_numbers = build_label_index(source_dir, doc_sets)
 
+    # Load epJSON schema from idfkit for structured field metadata and hover docs
+    object_index: dict[str, DocObjectInfo] | None = None
+    try:
+        object_index = build_object_index(version)
+    except Exception:
+        logger.warning(
+            "Failed to load epJSON schema for %s, field metadata will not be available", version, exc_info=True
+        )
+
     # Convert each doc set
     for ds in doc_sets:
         logger.info("Converting doc set: %s", ds.title)
+        # Only pass object index for IO Reference doc set (contains IDF object field docs)
+        ds_object_index = object_index if ds.slug == "io-reference" else None
         ds_result = convert_doc_set(
-            ds, output_dir, label_index, max_workers=max_workers, file_figure_numbers=file_figure_numbers
+            ds,
+            output_dir,
+            label_index,
+            max_workers=max_workers,
+            file_figure_numbers=file_figure_numbers,
+            object_index=ds_object_index,
         )
         result.doc_set_results.append(ds_result)
         logger.info(
@@ -740,8 +772,13 @@ def convert_version(
     # Generate zensical config
     generate_zensical_config(version, doc_sets, output_dir)
 
-    # Copy static assets (MathJax config, equation tooltips)
+    # Copy static assets (MathJax config, equation tooltips, editor bundle)
     copy_assets(output_dir)
+
+    # Generate compact JSON schema for Monaco hover documentation
+    if object_index:
+        schema_output = output_dir / "docs" / "assets" / "idd-schema.json"
+        serialize_for_monaco(object_index, version, schema_output)
 
     # Build site
     if not skip_build:

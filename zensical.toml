@@ -19,6 +19,7 @@ features = [
     "navigation.footer",
     "navigation.tracking",
     "content.code.copy",
+    "toc.follow",
 ]
 
 [project.theme.icon]
@@ -41,3 +42,9 @@ accent = "amber"
 [project.theme.palette.toggle]
 icon = "material/brightness-4"
 name = "Switch to light mode"
+
+[project.markdown_extensions.toc]
+toc_depth = 4
+
+[project.markdown_extensions."pymdownx.arithmatex"]
+generic = true

@@ -8,6 +8,7 @@ requires-python = ">=3.10,<4.0"
 dependencies = [
     "tomli_w>=1.0",
     "tomli>=2.0; python_version < '3.11'",
+    "idfkit>=0.3.0",
 ]
 
 [project.urls]
@@ -23,6 +24,16 @@ dev = [
     "pypandoc>=1.14",
     "tomli_w>=1.0",
 ]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["scripts"]
+
+[project.entry-points."pygments.lexers"]
+idf = "scripts.pygments_idf_lexer:IDFLexer"
 
 [tool.ruff]
 target-version = "py310"

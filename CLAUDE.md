@@ -135,6 +135,27 @@ All workflows are in `.github/workflows/`:
 
 A reusable action at `.github/actions/setup-python-env/action.yml` handles Python + uv setup.
 
+## IDF Editor (Monaco) Development
+
+The `idf-editor/` directory contains a TypeScript/Vite project that builds a browser-side Monaco editor bundle for IDF code blocks. When making CSS or JS changes to the editor:
+
+1. **Edit source** in `idf-editor/src/` (e.g., `editor-manager.ts`, `idf-editor.css`)
+2. **Build the bundle:** `cd idf-editor && npm run build`
+3. **Copy to assets:** `cp idf-editor/dist/idf-editor.{js,css} scripts/assets/`
+4. **Rebuild the docs:** `make convert VERSION=v25.2.0` (this copies `scripts/assets/` into the build output)
+
+For iterating quickly without a full `make convert`, you can copy assets directly into the build output and rebuild Zensical:
+
+```bash
+cp scripts/assets/idf-editor.{js,css} build/v25.2/docs/assets/
+cd build/v25.2 && uv run zensical build --clean
+```
+
+**Important:** Always use `--clean` (or delete `build/vXX.X/.cache/`) when:
+- Adding or changing a Pygments lexer (e.g., the IDF lexer that produces `language-idf` CSS classes)
+- Changing code block language detection
+- Zensical caches rendered HTML and won't pick up new lexer registrations without clearing the cache
+
 ## Conventions
 
 - All Python code is formatted and linted by Ruff. Run `make check` to validate.
