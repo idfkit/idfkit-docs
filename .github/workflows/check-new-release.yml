@@ -26,12 +26,12 @@ jobs:
           LATEST_TAG=$(gh api repos/NatLabRockies/EnergyPlus/releases/latest --jq '.tag_name')
           echo "Latest EnergyPlus release: ${LATEST_TAG}"
 
-          # Check if this version is already in our versions.json (if it exists on gh-pages)
+          # Check if this version is already in our versions.json on gh-pages
           KNOWN_VERSIONS=""
-          if gh api repos/${{ github.repository }}/contents/versions.json --jq '.content' 2>/dev/null | base64 -d > /tmp/versions.json 2>/dev/null; then
-            KNOWN_VERSIONS=$(cat /tmp/versions.json | python3 -c "
+          if gh api "repos/${{ github.repository }}/contents/versions.json?ref=gh-pages" --jq '.content' 2>/dev/null | base64 -d > /tmp/versions.json 2>/dev/null; then
+            KNOWN_VERSIONS=$(python3 -c "
           import json, sys
-          data = json.load(sys.stdin)
+          data = json.load(open('/tmp/versions.json'))
           for entry in data:
               print(entry['title'])
           ")

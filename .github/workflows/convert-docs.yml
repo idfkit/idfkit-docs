@@ -149,24 +149,42 @@ jobs:
         with:
           path: dist-artifacts/
 
+      - name: Restore existing gh-pages content
+        if: ${{ inputs.versions != 'all' }}
+        run: |
+          git fetch origin gh-pages:gh-pages 2>/dev/null || true
+          if git rev-parse --verify gh-pages >/dev/null 2>&1; then
+            git worktree add gh-pages-checkout gh-pages
+            # Copy existing version directories (v*/) to dist/
+            mkdir -p dist
+            for dir in gh-pages-checkout/v*/; do
+              [ -d "$dir" ] && cp -a "$dir" dist/
+            done
+            git worktree remove gh-pages-checkout --force
+          fi
+
       - name: Merge version outputs
         run: |
           mkdir -p dist
 
-          # Move each version artifact to its versioned directory
+          # Move each version artifact to its versioned directory (overwrites restored versions)
           for dir in dist-artifacts/docs-*/; do
             version_short=$(basename "$dir" | sed 's/^docs-//')
+            # Remove old version if restored from gh-pages
+            rm -rf "dist/${version_short}"
             mv "$dir" "dist/${version_short}"
           done
 
-          # Generate versions.json and landing page
-          VERSIONS="${{ needs.prepare.outputs.all_versions }}"
+          # Discover all versions now in dist/ and regenerate root files
           uv run python -c "
-          from scripts.version_manager import generate_versions_json, generate_root_landing
+          from scripts.version_manager import _discover_versions, generate_versions_json, generate_root_landing, generate_robots_txt, generate_sitemap
           from pathlib import Path
-          versions = '${VERSIONS}'.split(',')
-          generate_versions_json(versions, Path('dist'))
-          generate_root_landing(Path('dist'), versions)
+          dist = Path('dist')
+          versions = _discover_versions(dist)
+          generate_versions_json(versions, dist)
+          generate_root_landing(dist, versions)
+          generate_robots_txt(dist)
+          generate_sitemap(dist, versions)
           "
 
       - name: Deploy to GitHub Pages
