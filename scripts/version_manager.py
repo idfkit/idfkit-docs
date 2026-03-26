@@ -110,7 +110,7 @@ def generate_root_landing(output_dir: Path, versions: list[str]) -> Path:
   "publisher": {{
     "@type": "Person",
     "name": "Samuel Letellier-Duchesne",
-    "url": "https://samuelduchesne.com"
+    "url": "https://samuelduchesne.github.io"
   }},
   "isPartOf": {{
     "@type": "WebSite",
