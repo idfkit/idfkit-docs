@@ -2,7 +2,7 @@
 name = "idfkit-docs"
 version = "0.0.1"
 description = "EnergyPlus documentation built with Zensical"
-authors = [{ name = "Samuel Letellier-Duchesne", email = "samuelduchesne@me.com" }]
+authors = [{ name = "Samuel Letellier-Duchesne", email = "developers@idfkit.com" }]
 readme = "README.md"
 requires-python = ">=3.10,<4.0"
 dependencies = [
