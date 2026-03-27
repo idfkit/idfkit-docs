@@ -3,7 +3,7 @@ site_name = "idfkit-docs"
 site_url = "https://docs.idfkit.com"
 site_description = "Comprehensive EnergyPlus documentation — Input/Output Reference, Engineering Reference, and more. Searchable, hyperlinked, and covering all versions."
 site_author = "Samuel Letellier-Duchesne"
-copyright = "Maintained by <a href='https://samuelduchesne.com'>samuelduchesne</a>."
+copyright = "Maintained by <a href='https://samuelduchesne.github.io'>samuelduchesne</a>."
 repo_url = "https://github.com/idfkit/idfkit-docs"
 
 [project.plugins.meta]
