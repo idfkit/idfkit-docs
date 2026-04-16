@@ -1,0 +1,53 @@
+/**
+ * Zensical / Material Theme Overrides
+ *
+ * Fixes for theme features that don't work correctly out of the box.
+ */
+
+/* ---------------------------------------------------------------------------
+ * Mobile TOC — show "On this page" in the hamburger drawer
+ * -------------------------------------------------------------------------*/
+
+/*
+ * Zensical hides the TOC toggle and its nav in the primary (mobile) sidebar:
+ *   .md-nav--primary .md-nav__link[for="__toc"],
+ *   .md-nav--primary .md-nav__link[for="__toc"] ~ .md-nav { display: none }
+ *
+ * Override on mobile so users can access the page TOC from the hamburger menu.
+ * The label (page title repeated as a TOC toggle) stays hidden to avoid
+ * duplication — only the TOC nav itself is shown.
+ */
+@media screen and (max-width: 76.1875em) {
+  .md-nav--primary .md-nav__link[for="__toc"] ~ .md-nav {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Collapsible TOC sub-trees (desktop right-side + mobile drawer)
+ * -------------------------------------------------------------------------*/
+
+/*
+ * Object names (H2) stay visible; their children (Inputs / Field: …)
+ * collapse by default and expand when the object is the active anchor.
+ * This keeps the list scannable while preserving deep-link navigation.
+ *
+ * Requires toc.follow in the theme features list so that
+ * md-nav__link--active is set on the currently-visible heading.
+ */
+
+/* Collapse nested lists under each H2 in the TOC */
+.md-nav--secondary > .md-nav__list > .md-nav__item > .md-nav {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.25s ease, opacity 0.2s ease;
+}
+
+/* Expand when the H2 anchor is active (toc.follow sets md-nav__link--active) */
+.md-nav--secondary > .md-nav__list > .md-nav__item > .md-nav__link--active ~ .md-nav {
+  max-height: 500px;         /* large enough for any field list */
+  opacity: 1;
+}
