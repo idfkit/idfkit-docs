@@ -13,7 +13,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://docs.idfkit.com/"
-Repository = "https://github.com/samuelduchesne/idfkit-docs"
+Repository = "https://github.com/idfkit/idfkit-docs"
 Documentation = "https://docs.idfkit.com/"
 
 [dependency-groups]

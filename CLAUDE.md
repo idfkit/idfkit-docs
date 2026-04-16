@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **idfkit-docs** converts EnergyPlus LaTeX documentation into a multi-version Markdown website built with [Zensical](https://zensical.org/). It automates the full pipeline: clone EnergyPlus source, preprocess LaTeX, convert via Pandoc, postprocess Markdown, and deploy as a static site.
 
 - **Site:** <https://docs.idfkit.com/>
-- **Repo:** <https://github.com/samuelduchesne/idfkit-docs>
+- **Repo:** <https://github.com/idfkit/idfkit-docs>
 - **Upstream source:** <https://github.com/NatLabRockies/EnergyPlus>
 - **Versions covered:** v8.9.0 through v26.1.0 (17 versions)
 - **Doc sets:** 13 per version (IO Reference, Engineering Reference, Getting Started, etc.)

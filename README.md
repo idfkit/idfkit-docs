@@ -1,12 +1,12 @@
 # idfkit-docs
 
-[![Release](https://img.shields.io/github/v/release/samuelduchesne/idfkit-docs)](https://github.com/samuelduchesne/idfkit-docs/releases)
-[![Build status](https://img.shields.io/github/actions/workflow/status/samuelduchesne/idfkit-docs/main.yml?branch=main)](https://github.com/samuelduchesne/idfkit-docs/actions/workflows/main.yml?query=branch%3Amain)
-[![License](https://img.shields.io/github/license/samuelduchesne/idfkit-docs)](https://github.com/samuelduchesne/idfkit-docs/blob/main/LICENSE)
+[![Release](https://img.shields.io/github/v/release/idfkit/idfkit-docs)](https://github.com/idfkit/idfkit-docs/releases)
+[![Build status](https://img.shields.io/github/actions/workflow/status/idfkit/idfkit-docs/main.yml?branch=main)](https://github.com/idfkit/idfkit-docs/actions/workflows/main.yml?query=branch%3Amain)
+[![License](https://img.shields.io/github/license/idfkit/idfkit-docs)](https://github.com/idfkit/idfkit-docs/blob/main/LICENSE)
 
 EnergyPlus documentation built with [Zensical](https://zensical.org/).
 
-**[Documentation](https://docs.idfkit.com/)** | **[GitHub](https://github.com/samuelduchesne/idfkit-docs/)**
+**[Documentation](https://docs.idfkit.com/)** | **[GitHub](https://github.com/idfkit/idfkit-docs/)**
 
 ## Development
 
@@ -16,7 +16,7 @@ This project uses [uv](https://docs.astral.sh/uv/) for dependency management and
 
 ```bash
 # Clone the repository
-git clone https://github.com/samuelduchesne/idfkit-docs.git
+git clone https://github.com/idfkit/idfkit-docs.git
 cd idfkit-docs
 
 # Install dependencies and pre-commit hooks

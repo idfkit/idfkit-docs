@@ -9,7 +9,7 @@ You can contribute in many ways:
 
 ## Report Bugs
 
-Report bugs at https://github.com/samuelduchesne/idfkit-docs/issues
+Report bugs at https://github.com/idfkit/idfkit-docs/issues
 
 If you are reporting a bug, please include:
 
@@ -23,7 +23,7 @@ idfkit-docs could always use more documentation. Whether fixing a typo or adding
 
 ## Submit Feedback
 
-The best way to send feedback is to file an issue at https://github.com/samuelduchesne/idfkit-docs/issues.
+The best way to send feedback is to file an issue at https://github.com/idfkit/idfkit-docs/issues.
 
 # Get Started!
 
