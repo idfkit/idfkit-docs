@@ -20,9 +20,10 @@ TARGET_VERSIONS: list[str] = [
     "v24.2.0",
     "v25.1.0",
     "v25.2.0",
+    "v26.1.0",
 ]
 
-LATEST_VERSION: str = "v25.2.0"
+LATEST_VERSION: str = "v26.1.0"
 
 ENERGYPLUS_REPO: str = "https://github.com/NatLabRockies/EnergyPlus.git"
 
