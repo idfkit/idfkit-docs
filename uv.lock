@@ -70,11 +70,11 @@ wheels = [
 
 [[package]]
 name = "idfkit"
-version = "0.8.0"
+version = "0.11.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/18/bc/b67878819993e09471d7a622adfcbbb1ecd4d8f66ec75e2d2f767a92fc72/idfkit-0.8.0.tar.gz", hash = "sha256:608b50dd9048c0fea4cdf655239ebb6ac8f74201fd5d1c5eaebef27401b95e71", size = 13900425, upload-time = "2026-04-16T18:54:09.042Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/3c/28/38c9a4a5eca35a20960f28ffa4719d0619dc562904665e949b047c25bf6d/idfkit-0.11.0.tar.gz", hash = "sha256:b529a5f95d628f0c5ee8be02fb8db308f4f7dcf4c82fbf705cd27450aeca4deb", size = 15188656, upload-time = "2026-04-28T11:54:14.888Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ad/72/c757c68d2c1d05bcee99158c953a02de1a7af3865ada44d0c93edc8becb1/idfkit-0.8.0-py3-none-any.whl", hash = "sha256:8003e11b511bccdbbec520151d5d9e06a345227c37ff08e39cc3664e221b3def", size = 13203077, upload-time = "2026-04-16T18:54:12.526Z" },
+    { url = "https://files.pythonhosted.org/packages/a5/00/680c39b68fa1ff1ac55e9f36e4151444f1bc9d804af26a245274f80a7c60/idfkit-0.11.0-py3-none-any.whl", hash = "sha256:2cf7a55365c1f2726f3b41510403fbeb4eed70c595a4438eea733cdd6d66f771", size = 14022901, upload-time = "2026-04-28T11:54:18.448Z" },
 ]
 
 [[package]]
@@ -98,7 +98,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "idfkit", specifier = "==0.8.0" },
+    { name = "idfkit", specifier = "==0.11.0" },
     { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2.0" },
     { name = "tomli-w", specifier = ">=1.0" },
 ]
