@@ -59,15 +59,29 @@ This runs:
 
 ### Conversion Pipeline
 
-The core pipeline for a single version:
+Doc sets come from two upstream trees. Most live in the LaTeX tree as
+`doc/<name>/<name>.tex`; the rest are ones EnergyPlus has migrated into the
+Sphinx tree as `doc/readthedocs/sphinx/<name>/<name>.rst`. Both converge on the
+same postprocessor and build.
 
 ```
-EnergyPlus .tex source
-  → scripts/latex_preprocessor.py   (expand macros, siunitx units, strip \input{})
-  → Pandoc with scripts/pandoc_filters/energyplus.lua   (LaTeX → Markdown)
-  → scripts/markdown_postprocessor.py   (fix links, images, cross-refs, front matter)
-  → Zensical build   (Markdown → HTML site)
+EnergyPlus .tex source                          EnergyPlus .rst source
+  → scripts/latex_preprocessor.py                 → scripts/rst_doc_sets.py
+      (macros, siunitx units, strip \input{})         (split monolith into pages)
+  → Pandoc + scripts/pandoc_filters/              → Pandoc (reST reader)
+      energyplus.lua   (LaTeX → Markdown)             (reST → Markdown)
+                          ↘                    ↙
+              scripts/markdown_postprocessor.py
+                (links, images, cross-refs, front matter)
+                              ↓
+              Zensical build   (Markdown → HTML site)
 ```
+
+`discover_doc_sets()` scans the LaTeX tree first and falls back to the Sphinx
+tree, so a document that moves between them keeps building. Anything in
+`DOC_SET_INFO` that neither tree provides is reported by
+`report_missing_doc_sets()` — a configured doc set must never disappear from a
+build silently.
 
 ### Directory Layout
 
@@ -81,6 +95,7 @@ scripts/
 ├── latex_preprocessor.py     # LaTeX macro expansion (siunitx, custom macros)
 ├── markdown_postprocessor.py # Post-Pandoc cleanup (links, images, cross-refs, front matter)
 ├── nav_generator.py          # Navigation structure from LaTeX \input chains
+├── rst_doc_sets.py           # Discovery/splitting/conversion for Sphinx .rst doc sets
 └── pandoc_filters/
     └── energyplus.lua        # Pandoc Lua filter (tables, admonitions, cross-refs)
 docs/
@@ -102,6 +117,8 @@ dist/                         # (gitignored) Final deployed multi-version site
 - **`scripts/markdown_postprocessor.py`** — Rewrites internal PDF links to cross-doc-set Markdown links, fixes image paths, resolves cross-references via the label index, generates YAML front matter, and normalizes formatting.
 
 - **`scripts/nav_generator.py`** — Recursively parses LaTeX `\input{src/...}` directives to build the hierarchical navigation tree for the Zensical config.
+
+- **`scripts/rst_doc_sets.py`** — Handles doc sets that upstream moved from the LaTeX tree into the Sphinx tree (`doc/readthedocs/sphinx/`). Parses reStructuredText section levels, splits each monolithic `.rst` into the same page shape the LaTeX pipeline produces (a page per chapter, child pages per section), and converts each page with Pandoc's reST reader.
 
 - **`scripts/pandoc_filters/energyplus.lua`** — Pandoc Lua filter that converts tables to pipe-table markdown (Zensical compatibility), handles admonitions from blockquotes, normalizes non-breaking spaces, and processes code blocks.
 
@@ -161,6 +178,7 @@ cd build/v25.2 && uv run zensical build --clean
 - All Python code is formatted and linted by Ruff. Run `make check` to validate.
 - Version tags follow the format `vMAJOR.MINOR.PATCH` (e.g., `v25.2.0`). Short form is `vMAJOR.MINOR` (e.g., `v25.2`).
 - New EnergyPlus versions require adding entries to `TARGET_VERSIONS` and updating `LATEST_VERSION` in `scripts/config.py`. If the new version has a new doc set, add it to `DOC_SET_INFO`.
+- Watch the conversion log for `Configured doc set '...' was not found in the source tree`. That means upstream moved or renamed a document. If it moved to the Sphinx tree under a new directory name, map the new name back to its `DOC_SET_INFO` key in `DOC_SET_ALIASES`.
 - The `build/` and `dist/` directories are gitignored. `build/sources/` holds cloned EnergyPlus repos; `build/vXX.X/` holds per-version Zensical projects; `dist/` holds the final deployed site.
 - The Zensical site configuration template is in `zensical.toml` (root). Per-version configs are generated dynamically by `scripts/convert.py`.
 
