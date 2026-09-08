@@ -37,6 +37,18 @@ from scripts.latex_preprocessor import preprocess
 from scripts.markdown_postprocessor import postprocess
 from scripts.models import ConversionResult, DocSet, DocSetResult, LabelRef, VersionResult
 from scripts.nav_generator import extract_heading, generate_nav, parse_input_chain
+from scripts.rst_doc_sets import (
+    RstPage,
+    append_child_toc,
+    build_rst_pages,
+    collect_rst_labels,
+    discover_rst_doc_sets,
+    format_rst_figures,
+    normalize_heading_levels,
+    parse_rst_sections,
+    resolve_rst_roles,
+    rst_to_markdown,
+)
 from scripts.schema_utils import DocObjectInfo, build_object_index, serialize_for_monaco
 
 logger = logging.getLogger(__name__)
@@ -81,11 +93,44 @@ def discover_doc_sets(source_dir: Path) -> list[DocSet]:
                 title=title,
                 slug=slug,
                 source_dir=entry,
-                main_tex=main_tex,
+                main_source=main_tex,
             )
         )
 
-    return doc_sets
+    # Documents upstream has moved out of the LaTeX tree still live in the
+    # Sphinx tree as reStructuredText.  Add any that the LaTeX scan missed.
+    found = {ds.dir_name for ds in doc_sets}
+    for rst_set in discover_rst_doc_sets(source_dir, DOC_SET_INFO):
+        if rst_set.dir_name not in found:
+            doc_sets.append(rst_set)
+
+    report_missing_doc_sets(doc_sets)
+
+    # Order by source directory name, which is the order the LaTeX-only scan
+    # produced, so restored doc sets slot into the existing nav rather than
+    # reshuffling the tabs of versions that already build.
+    return sorted(doc_sets, key=lambda ds: ds.dir_name)
+
+
+def report_missing_doc_sets(doc_sets: list[DocSet]) -> list[str]:
+    """Warn about doc sets that are configured but were not found in the source.
+
+    Losing a configured document is what let Auxiliary Programs, the EMS
+    Application Guide, Tips and Tricks and EnergyPlus Essentials disappear from
+    the v25.1.0+ builds unnoticed: upstream moved them and the build simply
+    produced fewer documents without saying so.  Surfacing the gap makes the
+    next upstream reshuffle visible instead of silent.
+    """
+    found = {ds.dir_name for ds in doc_sets}
+    missing = [name for name in DOC_SET_INFO if name not in found]
+    for name in missing:
+        title, _slug = DOC_SET_INFO[name]
+        logger.warning(
+            "Configured doc set '%s' (%s) was not found in the source tree - it will be missing from this build",
+            name,
+            title,
+        )
+    return missing
 
 
 def _clean_equation_latex(latex: str) -> str:
@@ -240,7 +285,11 @@ def build_label_index(source_dir: Path, doc_sets: list[DocSet]) -> tuple[dict[st
     total_figures = 0
 
     for ds in doc_sets:
-        inputs = parse_input_chain(ds.main_tex)
+        if ds.source_format != "latex":
+            # reST doc sets carry their own cross-reference targets, resolved
+            # during conversion; there are no \label{} directives to index.
+            continue
+        inputs = parse_input_chain(ds.main_source)
         fig_counter = 0
         fig_label_to_num: dict[str, int] = {}
 
@@ -552,10 +601,13 @@ def convert_doc_set(
     using a :class:`~concurrent.futures.ThreadPoolExecutor`.  The Pandoc
     subprocess calls are I/O-bound, so threads work well here.
     """
+    if doc_set.source_format == "rst":
+        return convert_rst_doc_set(doc_set, output_dir, max_workers=max_workers)
+
     result = DocSetResult(doc_set=doc_set)
     copy_media(doc_set, output_dir / "docs")
 
-    inputs = parse_input_chain(doc_set.main_tex)
+    inputs = parse_input_chain(doc_set.main_source)
     parent_children = _build_parent_children_map(inputs)
     tasks = _collect_tasks(inputs, doc_set, output_dir, parent_children, result)
 
@@ -586,6 +638,105 @@ def convert_doc_set(
     generate_doc_set_index(doc_set, output_dir, first_page)
 
     return result
+
+
+def _rst_pages_for(doc_set: DocSet) -> tuple[list[RstPage], dict[str, str]]:
+    """Split a reST doc set into pages and collect its cross-reference targets."""
+    lines = doc_set.main_source.read_text(errors="replace").split("\n")
+    sections = parse_rst_sections(lines)
+    if not sections:
+        logger.warning("No sections found in %s", doc_set.main_source)
+        return [], {}
+    return build_rst_pages(lines, sections), collect_rst_labels(lines)
+
+
+def _convert_rst_page(
+    page: RstPage,
+    doc_set: DocSet,
+    output_dir: Path,
+    labels: dict[str, str],
+) -> ConversionResult:
+    """Convert one reST page to Markdown and write it into the build tree."""
+    output_path = output_dir / "docs" / doc_set.slug / page.md_rel
+
+    md_text, error = rst_to_markdown(page.rst_text)
+    if error:
+        return ConversionResult(source=doc_set.main_source, output=output_path, success=False, error=error)
+
+    md_text = normalize_heading_levels(md_text)
+    md_text = format_rst_figures(md_text)
+    md_text = resolve_rst_roles(md_text, labels)
+    md_text = append_child_toc(md_text, page)
+    md_text = postprocess(
+        md_text,
+        title=page.title,
+        doc_set_slug=doc_set.slug,
+        doc_set_title=doc_set.title,
+        rel_depth=page.rel_depth,
+        current_md_path=f"{doc_set.slug}/{page.md_rel}",
+    )
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(md_text)
+    return ConversionResult(source=doc_set.main_source, output=output_path, success=True)
+
+
+def convert_rst_doc_set(
+    doc_set: DocSet,
+    output_dir: Path,
+    *,
+    max_workers: int = 1,
+) -> DocSetResult:
+    """Convert a monolithic reStructuredText doc set into per-chapter pages."""
+    result = DocSetResult(doc_set=doc_set)
+    copy_media(doc_set, output_dir / "docs")
+
+    pages, labels = _rst_pages_for(doc_set)
+    if not pages:
+        return result
+
+    if max_workers > 1 and len(pages) > 1:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [executor.submit(_convert_rst_page, page, doc_set, output_dir, labels) for page in pages]
+            for future in as_completed(futures):
+                result.file_results.append(future.result())
+    else:
+        for page in pages:
+            result.file_results.append(_convert_rst_page(page, doc_set, output_dir, labels))
+
+    for file_result in result.file_results:
+        if not file_result.success:
+            logger.warning("Failed to convert %s: %s", file_result.output, file_result.error)
+
+    generate_doc_set_index(doc_set, output_dir, first_page=pages[0].md_rel)
+    return result
+
+
+def generate_rst_nav(doc_set: DocSet) -> list:
+    """Build the Zensical nav structure for a reST doc set."""
+    pages, _labels = _rst_pages_for(doc_set)
+
+    nav: list = []
+    by_chapter: dict[str, dict] = {}
+
+    for page in pages:
+        path = f"{doc_set.slug}/{page.md_rel}"
+        if "/" not in page.md_rel:
+            nav.append({page.title: path})
+            continue
+        chapter_slug = page.md_rel.split("/", 1)[0]
+        if page.md_rel.endswith("/index.md"):
+            entry = {page.title: [path]}
+            by_chapter[chapter_slug] = entry
+            nav.append(entry)
+        else:
+            entry = by_chapter.get(chapter_slug)
+            if entry is None:
+                nav.append({page.title: path})
+            else:
+                next(iter(entry.values())).append({page.title: path})
+
+    return nav
 
 
 def generate_index_page(version: str, doc_sets: list[DocSet], output_dir: Path) -> None:
@@ -637,7 +788,10 @@ def generate_zensical_config(
     # Build navigation
     nav_tabs = []
     for ds in doc_sets:
-        ds_nav = generate_nav(ds.source_dir, ds.slug, ds.dir_name)
+        if ds.source_format == "rst":
+            ds_nav = generate_rst_nav(ds)
+        else:
+            ds_nav = generate_nav(ds.source_dir, ds.slug, ds.dir_name)
         if ds_nav:
             nav_tabs.append((ds.title, ds.slug, ds_nav))
 

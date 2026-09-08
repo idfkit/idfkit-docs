@@ -45,6 +45,15 @@ DOC_SET_INFO: dict[str, tuple[str, str]] = {
     "essentials": ("EnergyPlus Essentials", "essentials"),
 }
 
+# Alternate source directory names for doc sets that upstream has renamed.
+# Maps the directory name found in the source tree to the DOC_SET_INFO key.
+# EnergyPlus renamed "tips-and-tricks-using-energyplus" to "tips_and_tricks"
+# when it moved that document from the LaTeX tree to the Sphinx tree in
+# v23.2.0; keeping the alias means both eras resolve to the same doc set.
+DOC_SET_ALIASES: dict[str, str] = {
+    "tips_and_tricks": "tips-and-tricks-using-energyplus",
+}
+
 # Directories under doc/ to exclude (not documentation sets)
 EXCLUDED_DIRS: set[str] = {
     "cmake",

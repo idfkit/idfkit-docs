@@ -8,13 +8,20 @@ from pathlib import Path
 
 @dataclass
 class DocSet:
-    """A single EnergyPlus documentation set (e.g., getting-started)."""
+    """A single EnergyPlus documentation set (e.g., getting-started).
+
+    ``source_format`` is ``"latex"`` for sets that live in the LaTeX tree as
+    ``doc/<name>/<name>.tex`` and ``"rst"`` for the ones upstream moved into
+    the Sphinx tree as ``doc/readthedocs/sphinx/<name>/<name>.rst``.
+    ``main_source`` points at whichever of the two is the entry document.
+    """
 
     dir_name: str
     title: str
     slug: str
     source_dir: Path
-    main_tex: Path
+    main_source: Path
+    source_format: str = "latex"
 
     @property
     def media_dir(self) -> Path:
