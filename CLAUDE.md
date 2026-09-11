@@ -182,6 +182,27 @@ cd build/v25.2 && uv run zensical build --clean
 - The `build/` and `dist/` directories are gitignored. `build/sources/` holds cloned EnergyPlus repos; `build/vXX.X/` holds per-version Zensical projects; `dist/` holds the final deployed site.
 - The Zensical site configuration template is in `zensical.toml` (root). Per-version configs are generated dynamically by `scripts/convert.py`.
 
+## The consumer register
+
+This repository is `idfkit-docs` in the consumer register, `governance/consumers.toml` in
+idfkit-conformance, read at the governance tag pinned in `.github/workflows/main.yml`. The register
+records where the idfkit level is declared and never the level itself.
+
+- **Where the level lives**: the exact `idfkit==X` pin in `project.dependencies` of `pyproject.toml`,
+  and nowhere else. Bumping it needs no register change.
+- **Its standing**: behind the current idfkit, recorded as a `not-yet` lag tracked by the open bump
+  pull request, because an adoption is in progress rather than declined. If this repository decides
+  to follow idfkit only on some other schedule, dispatch the bump with `decline_reason` stating that
+  policy, and the register records it as deliberate instead.
+- **Self-check**: the `consumer-register` job in `main.yml` calls `check-consumer.yml` at that tag.
+  It fails when the level moves to a file the register does not point at, or when a new dependency
+  on either library appears that the register does not name. It does not care whether the level is
+  current.
+- **Rehearsal**: `.github/workflows/rehearse-candidate.yml` builds a wheel from any idfkit ref and
+  type-checks `scripts/` against it with pyright laid over the environment, without touching
+  `pyproject.toml` or `uv.lock`. This repository has no test suite and no type checker of its own, so
+  that check is the whole rehearsal.
+
 ## Automated idfkit bumps
 
 When invoked by `.github/workflows/bump-idfkit.yml` on test failure after an idfkit version bump:
@@ -196,3 +217,11 @@ When invoked by `.github/workflows/bump-idfkit.yml` on test failure after an idf
   - files changed
   - tests run
   - remaining risks
+
+The bump also does three things that are not repairs, and none of them is for the repair step to undo:
+
+- It lists every `idfkit:unavailable` statement marker resting on a capability the new level closed,
+  opens the pull request as a draft, and fails while one is listed.
+- When the register holds a lag for this repository, it closes it through a paired pull request in
+  idfkit-conformance.
+- Dispatched with `decline_reason`, it bumps nothing and records a deliberate lag instead.
