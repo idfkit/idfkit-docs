@@ -1,0 +1,14 @@
+/* Center figures: standalone images (paragraphs containing only an <img>)
+   and their italic captions ("*Figure: ...*" renders as <em>) */
+.md-content p > img:only-child {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Center the caption paragraph that follows an image.
+   The Lua filter emits "*Figure: caption*" which renders as <p><em>...</em></p> */
+.md-content p:has(> img:only-child) + p > em:only-child {
+  display: block;
+  text-align: center;
+}
