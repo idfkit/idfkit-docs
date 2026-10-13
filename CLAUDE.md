@@ -146,7 +146,7 @@ dist/                         # (gitignored) Final deployed multi-version site
 All workflows are in `.github/workflows/`:
 
 - **`main.yml`** — Runs on push to main and PRs. Checks quality (`make check`) and docs build (`zensical build`).
-- **`check-new-release.yml`** — Weekly cron (Monday 08:00 UTC) checks for new EnergyPlus releases on NatLabRockies/EnergyPlus and triggers a conversion if found.
+- **New EnergyPlus releases** are detected by `energyplus-watch.yml` in idfkit-conformance, which tracks each release in one issue and opens this project's adoption only after its pinned idfkit carries the release. See `idfkit-conformance/energyplus/README.md`.
 - **`convert-docs.yml`** — Main build pipeline. Matrix job that converts each version in parallel, then merges all outputs and deploys to GitHub Pages.
 - **`on-release-main.yml`** — Triggers full rebuild of all versions when a release is published on this repo.
 
