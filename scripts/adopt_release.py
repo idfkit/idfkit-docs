@@ -4,11 +4,13 @@ The adoption procedure is held in idfkit-conformance (``energyplus/README.md``).
 declares two commands for this project, and both are defined here.
 
 ``target-list TAG``
-    Adds the release to ``TARGET_VERSIONS`` in ``scripts/config.py`` and designates it
-    ``LATEST_VERSION``. The command refuses, with exit status 1, when the installed idfkit does not
-    list the release. idfkit returns the newest schema it holds for a release it does not list, so
-    a conversion against an older level would publish the field metadata of the previous release
-    under the heading of the new one without failing.
+    Adds the release to ``TARGET_VERSIONS`` in ``scripts/config.py`` and designates the newest
+    listed release ``LATEST_VERSION``. The command refuses, with exit status 1, when the installed
+    idfkit does not list the release. idfkit returns the newest schema it holds for a release it
+    does not list, so a conversion against an older level would publish the field metadata of the
+    previous release under the heading of the new one without failing. The command also refuses
+    when another patch release of the same ``MAJOR.MINOR`` is listed, because the build and the
+    published path of a release are named ``vMAJOR.MINOR`` and the two would overwrite each other.
 
 ``doc-sets TAG``
     Reports how the documentation directories of the upstream release map onto ``DOC_SET_INFO``:
@@ -33,10 +35,11 @@ import sys
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 from idfkit.versions import ENERGYPLUS_VERSIONS
 
-from scripts.config import DOC_SET_INFO, ENERGYPLUS_REPO, EXCLUDED_DIRS, TARGET_VERSIONS
+from scripts.config import DOC_SET_INFO, ENERGYPLUS_REPO, EXCLUDED_DIRS, TARGET_VERSIONS, version_to_short
 from scripts.rst_doc_sets import SPHINX_EXCLUDED_DIRS, SPHINX_SUBDIR, discover_rst_doc_sets
 
 CONFIG_PATH = Path(__file__).parent / "config.py"
@@ -47,6 +50,10 @@ _TARGET_BLOCK = re.compile(
     re.MULTILINE,
 )
 _LATEST_LINE = re.compile(r'^LATEST_VERSION: str = "v\d+\.\d+\.\d+"$', re.MULTILINE)
+
+# Upper bound for one git command of the upstream fetch. A stalled connection otherwise holds the
+# adoption job until its own limit.
+_GIT_TIMEOUT_SECONDS = 600
 
 
 class AdoptionError(Exception):
@@ -97,6 +104,15 @@ def with_release(config_text: str, release: ReleaseTag) -> str:
     if len(_LATEST_LINE.findall(config_text)) != 1:
         raise AdoptionError("LATEST_VERSION was not found exactly once in scripts/config.py")
     listed = {ReleaseTag.parse(tag) for tag in re.findall(r'"(v\d+\.\d+\.\d+)"', block.group("body"))}
+    # Every build and published path is named by version_to_short, that is vMAJOR.MINOR. Two patch
+    # releases of one MAJOR.MINOR would be built into, and deployed to, the same directory.
+    same_minor = sorted(tag for tag in listed if (tag.major, tag.minor) == (release.major, release.minor))
+    if same_minor and release not in listed:
+        raise AdoptionError(
+            f"{same_minor[-1]} is listed and shares the path {version_to_short(str(release))} with {release}. "
+            f"Remove {same_minor[-1]} from TARGET_VERSIONS in scripts/config.py if {release} replaces it, "
+            "then run the command again."
+        )
     ordered = sorted(listed | {release})
     body = "".join(f'    "{tag}",\n' for tag in ordered)
     text = config_text[: block.start("body")] + body + config_text[block.end("body") :]
@@ -117,13 +133,17 @@ def add_to_target_list(release: ReleaseTag, config_path: Path = CONFIG_PATH) -> 
 # ── The documentation sets ────────────────────────────────────────────────────
 
 
+#: The source format a configured set is found in.
+SourceFormat = Literal["latex", "rst"]
+
+
 @dataclass(frozen=True)
 class DocSetSurvey:
     """How the documentation directories of one upstream release map onto ``DOC_SET_INFO``."""
 
     release: ReleaseTag
     #: Configured set name to the source format it is found in, ``latex`` or ``rst``.
-    formats: dict[str, str] = field(default_factory=dict)
+    formats: dict[str, SourceFormat] = field(default_factory=dict)
     #: LaTeX directories with a main document that no configured set names.
     unmatched_latex: tuple[str, ...] = ()
     #: Sphinx directories with a main document that no configured set or alias matches.
@@ -157,7 +177,7 @@ def survey(source_dir: Path, release: ReleaseTag) -> DocSetSurvey:
     if not doc_dir.is_dir():
         raise AdoptionError(f"no doc/ directory at {source_dir}")
     latex = [entry.name for entry in _directories(doc_dir, EXCLUDED_DIRS, ".tex")]
-    formats = {name: "latex" for name in latex if name in DOC_SET_INFO}
+    formats: dict[str, SourceFormat] = {name: "latex" for name in latex if name in DOC_SET_INFO}
     matched_sphinx: set[str] = set()
     for doc_set in discover_rst_doc_sets(source_dir, DOC_SET_INFO):
         matched_sphinx.add(doc_set.source_dir.name)
@@ -171,18 +191,33 @@ def survey(source_dir: Path, release: ReleaseTag) -> DocSetSurvey:
     )
 
 
+@dataclass(frozen=True)
+class _GitCommand:
+    """One git command of the upstream fetch, with the name a failure is reported under."""
+
+    name: str
+    arguments: tuple[str, ...]
+
+
 def fetch_entry_documents(release: ReleaseTag, destination: Path) -> Path:
     """Check out the entry document of every documentation directory of *release*, and nothing else."""
     target = destination / str(release)
-    commands = [
-        ["git", "clone", "--quiet", "--filter=blob:none", "--no-checkout", "--depth=1", "--branch", str(release), "--single-branch", ENERGYPLUS_REPO, str(target)],
-        ["git", "-C", str(target), "sparse-checkout", "set", "--no-cone", "/doc/*/*.tex", f"/doc/{SPHINX_SUBDIR}/*/*.rst"],
-        ["git", "-C", str(target), "checkout", "--quiet"],
-    ]  # fmt: skip
+    commands = (
+        _GitCommand("git clone", ("git", "clone", "--quiet", "--filter=blob:none", "--no-checkout", "--depth=1", "--branch", str(release), "--single-branch", ENERGYPLUS_REPO, str(target))),
+        _GitCommand("git sparse-checkout", ("git", "-C", str(target), "sparse-checkout", "set", "--no-cone", "/doc/*/*.tex", f"/doc/{SPHINX_SUBDIR}/*/*.rst")),
+        _GitCommand("git checkout", ("git", "-C", str(target), "checkout", "--quiet")),
+    )  # fmt: skip
     for command in commands:
-        done = subprocess.run(command, capture_output=True, text=True, check=False)
+        try:
+            done = subprocess.run(
+                command.arguments, capture_output=True, text=True, check=False, timeout=_GIT_TIMEOUT_SECONDS
+            )
+        except subprocess.TimeoutExpired as expired:
+            raise AdoptionError(
+                f"{command.name} did not finish within {_GIT_TIMEOUT_SECONDS} s for {release}"
+            ) from expired
         if done.returncode != 0:
-            raise AdoptionError(f"{' '.join(command[:3])} failed for {release}: {done.stderr.strip()}")
+            raise AdoptionError(f"{command.name} failed for {release}: {done.stderr.strip()}")
     return target
 
 
@@ -212,9 +247,16 @@ def render(current: DocSetSurvey, previous: DocSetSurvey | None) -> str:
             for name, fmt in current.formats.items()
             if name in previous.formats and previous.formats[name] != fmt
         ]
-        new = [name for name in (*current.unmatched_latex, *current.unmatched_sphinx) if name not in (*previous.unmatched_latex, *previous.unmatched_sphinx)]  # fmt: skip
+        # The two trees are compared separately. An unmatched directory that moves from the LaTeX
+        # tree to the Sphinx tree under the same name changes from converted to omitted.
+        new = [
+            *(f"{name} (LaTeX)" for name in current.unmatched_latex if name not in previous.unmatched_latex),
+            *(f"{name} (Sphinx)" for name in current.unmatched_sphinx if name not in previous.unmatched_sphinx),
+        ]
         lines += [f"**Sets whose source format differs from {previous.release}:**", "", *listing(moved), ""]
         lines += [f"**Unmatched directories that {previous.release} did not have:**", "", *listing(new), ""]
+    else:
+        lines += ["No preceding release was surveyed, so no comparison with one is reported.", ""]
     lines += [
         "Accept when each unmatched directory is either configured in `DOC_SET_INFO` or `DOC_SET_ALIASES` "
         "with a title, or stated as excluded, and each set that changed format has been converted once "
@@ -257,8 +299,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {error}", file=sys.stderr)
         return 1
     print(report)
-    # A command the adoption run executes has its output kept only on failure. The job summary is
-    # where a successful run shows the report.
+    # The adoption run copies the output of this step into the pull request body. The job summary
+    # holds the same report rendered as Markdown.
     if summary := os.environ.get("GITHUB_STEP_SUMMARY"):
         with Path(summary).open("a", encoding="utf-8") as handle:
             handle.write(report)

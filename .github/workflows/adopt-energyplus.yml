@@ -16,7 +16,8 @@ name: adopt-energyplus
 # 1 while the installed idfkit does not list the release, because idfkit returns the newest schema
 # it holds for a release it does not list and the conversion would publish the wrong field
 # metadata without failing. The report of documentation directories that no configured set matches
-# (`python -m scripts.adopt_release doc-sets`) is written to the job summary for a person to accept.
+# (`python -m scripts.adopt_release doc-sets`) is copied into the pull request body, and into the
+# job summary, for a person to accept.
 # Converting and publishing the release remains convert-docs.yml, dispatched by a maintainer after
 # the merge.
 #
