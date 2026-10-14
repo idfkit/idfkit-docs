@@ -1,0 +1,49 @@
+name: adopt-energyplus
+
+# Adopt one EnergyPlus release in this project, as a draft pull request on `energyplus/X.Y.Z`.
+#
+# This file holds no logic. The steps, their order, the command each one runs and the gate are
+# declared for the project `idfkit-docs` in `governance/energyplus.toml` of idfkit-conformance, and
+# the reusable workflow called below executes exactly those commands and no others. It never
+# merges, publishes or converts: the caller grants `contents: write` and `pull-requests: write` only.
+#
+# THE TAG IS STATED TWICE, on `uses:` and as `governance_level`, because a called workflow cannot
+# see its own ref. The reusable workflow refuses the run unless the two are the same string, so
+# both are changed together or not at all.
+#
+# THE ORDER IS A RULE. The idfkit level is moved by bump-idfkit.yml and not here. The step that adds
+# the release to TARGET_VERSIONS (`python -m scripts.adopt_release target-list`) exits with status
+# 1 while the installed idfkit does not list the release, because idfkit returns the newest schema
+# it holds for a release it does not list and the conversion would publish the wrong field
+# metadata without failing. The report of documentation directories that no configured set matches
+# (`python -m scripts.adopt_release doc-sets`) is copied into the pull request body, and into the
+# job summary, for a person to accept.
+# Converting and publishing the release remains convert-docs.yml, dispatched by a maintainer after
+# the merge.
+#
+# It is dispatched by the watch in idfkit-conformance, and may be dispatched by hand. A second run
+# for a release that is already carried changes nothing.
+run-name: Adopt EnergyPlus ${{ inputs.release }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: The EnergyPlus release to adopt, as X.Y.Z.
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  adopt:
+    uses: idfkit/idfkit-conformance/.github/workflows/adopt-energyplus.yml@governance-2026.25
+    with:
+      project: idfkit-docs
+      governance_level: governance-2026.25
+      release: ${{ inputs.release }}
+    secrets:
+      APP_ID: ${{ secrets.APP_ID }}
+      APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
