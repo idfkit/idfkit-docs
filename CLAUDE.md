@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Site:** <https://docs.idfkit.com/>
 - **Repo:** <https://github.com/idfkit/idfkit-docs>
 - **Upstream source:** <https://github.com/NatLabRockies/EnergyPlus>
-- **Versions covered:** v8.9.0 through v26.1.0 (17 versions)
+- **Versions covered:** v8.9.0 through v26.2.0 (18 versions)
 - **Doc sets:** 13 per version (IO Reference, Engineering Reference, Getting Started, etc.)
 
 ## Common Commands
