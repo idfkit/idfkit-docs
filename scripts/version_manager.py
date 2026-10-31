@@ -174,6 +174,7 @@ h1{{
 }}
 .cta:hover{{transform:translateY(-2px);box-shadow:var(--idfkit-elevation-overlay)}}
 .cta svg{{width:20px;height:20px}}
+main{{width:100%;max-width:52rem}}
 .section-label{{
   margin-top:var(--idfkit-space-6);margin-bottom:var(--idfkit-space-3);
   font-family:var(--idfkit-font-code);font-size:.8rem;font-weight:var(--idfkit-font-weight-medium);

@@ -92,3 +92,29 @@
   font-weight: var(--idfkit-font-weight-regular);
   color: var(--md-default-fg-color--light);
 }
+
+/* The drawer and the narrow header keep the version too. A phone has room for the mark and the version,
+   but not for the whole lockup beside it. */
+@media screen and (max-width: 76.234375em) {
+  .md-nav .md-nav__title[for="__drawer"] {
+    font-size: 0.8rem;
+    font-weight: var(--idfkit-font-weight-regular);
+    color: var(--md-default-fg-color--light);
+  }
+
+  .md-header .md-header__title .md-header__topic:first-child .md-ellipsis {
+    display: block;
+    flex: none;
+    margin-inline-start: 0.4rem;
+  }
+}
+
+@media screen and (max-width: 44.984375em) {
+  .md-header .md-header__title .md-header__topic:first-child::before {
+    flex: none;
+    width: 1.2rem;
+    aspect-ratio: 80 / 110.55;
+    -webkit-mask-size: auto 100%;
+    mask-size: auto 100%;
+  }
+}
