@@ -36,7 +36,7 @@ packages = ["scripts"]
 idf = "scripts.pygments_idf_lexer:IDFLexer"
 
 [tool.idfkit.identity]
-level = "identity-2026.2"
+level = "identity-2026.3"
 
 [tool.ruff]
 target-version = "py310"
