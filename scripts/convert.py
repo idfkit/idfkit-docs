@@ -61,9 +61,21 @@ ASSETS_DIR = Path(__file__).parent / "assets"
 #: The theme overrides directory the generated zensical.toml names, beside it in the build output.
 OVERRIDES_DIR_NAME = "overrides"
 
-#: The page template: the host's head fragment (favicons, theme colours, social image) on every page.
+#: The page template: the host's head fragment (favicons, theme colours, social image) on every page,
+#: and a tab title that names the product, since the site name is the version alone.
 _MAIN_TEMPLATE = """\
 {% extends "base.html" %}
+
+{% block htmltitle %}
+  {% set site = "EnergyPlus " ~ config.site_name %}
+  {% if page.meta and page.meta.title %}
+    <title>{{ page.meta.title }} - {{ site }}</title>
+  {% elif page.title and not page.is_homepage %}
+    <title>{{ page.title | striptags }} - {{ site }}</title>
+  {% else %}
+    <title>{{ site }}</title>
+  {% endif %}
+{% endblock %}
 
 {% block extrahead %}
   {# idfkit identity: hosts/docs.idfkit.com/head.html, inlined by scripts/convert.py. #}
@@ -827,7 +839,7 @@ def generate_zensical_config(
 
     # Version-specific overrides
     # The lockup names the site, so the title beside it carries only what the lockup cannot: the version.
-    project["site_name"] = f"EnergyPlus {version_title}"
+    project["site_name"] = version_title
     project["site_url"] = "/"
 
     # Build navigation

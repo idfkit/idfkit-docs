@@ -84,7 +84,11 @@
   max-width: 48rem;
 }
 
-/* The lockup replaces the site title, but this site's title carries the version the lockup cannot. */
+/* The lockup replaces the site title, but this site's title carries the version the lockup cannot.
+   It sits on the lockup's baseline, as a quiet detail of it rather than a second title. */
 .md-header .md-header__title .md-header__topic:first-child .md-ellipsis {
   visibility: visible;
+  transform: translateY(0.34em);
+  font-weight: var(--idfkit-font-weight-regular);
+  color: var(--md-default-fg-color--light);
 }
