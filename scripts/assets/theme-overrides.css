@@ -83,13 +83,3 @@
   color: var(--md-footer-fg-color--lighter);
   max-width: 48rem;
 }
-
-/* ---------------------------------------------------------------------------
- * Header mark in the dark scheme. The vendored identity/material/logo.svg is
- * drawn in currentColor, which an <img> cannot inherit, so the theme's logo
- * renders in the initial colour on every ground. Invert it on the dark scheme;
- * the light scheme shows it as drawn.
- * -------------------------------------------------------------------------*/
-[data-md-color-scheme="slate"] .md-header__button.md-logo img {
-  filter: invert(1);
-}
