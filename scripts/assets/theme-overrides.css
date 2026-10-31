@@ -83,3 +83,8 @@
   color: var(--md-footer-fg-color--lighter);
   max-width: 48rem;
 }
+
+/* The lockup replaces the site title, but this site's title carries the version the lockup cannot. */
+.md-header .md-header__title .md-header__topic:first-child .md-ellipsis {
+  visibility: visible;
+}

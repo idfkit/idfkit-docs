@@ -28,8 +28,15 @@ PROPERTY_NAME: str = "EnergyPlus docs"
 #: stylesheet paths the generated zensical.toml links, in the order the derivation contract fixes:
 #: the derivation first, the site's own stylesheets after it.
 MATERIAL_SITE_DIR: str = "identity/material"
-MATERIAL_EXTRA_CSS: tuple[str, ...] = (f"{MATERIAL_SITE_DIR}/material.css", f"{MATERIAL_SITE_DIR}/fonts.css")
-MATERIAL_LOGO: str = f"{MATERIAL_SITE_DIR}/logo.svg"
+#: The host's generated lockup lands beside it. The theme shows lockup.svg as the logo, and lockup.css
+#: paints it in the header's text colour and hides the site title the lockup replaces.
+LOCKUP_SITE_DIR: str = "identity/hosts/docs.idfkit.com"
+MATERIAL_EXTRA_CSS: tuple[str, ...] = (
+    f"{MATERIAL_SITE_DIR}/material.css",
+    f"{MATERIAL_SITE_DIR}/fonts.css",
+    f"{LOCKUP_SITE_DIR}/lockup.css",
+)
+MATERIAL_LOGO: str = f"{LOCKUP_SITE_DIR}/lockup.svg"
 MATERIAL_FAVICON: str = f"{MATERIAL_SITE_DIR}/favicon.svg"
 
 #: Where the css derivation lands inside the deployment root, for the version picker.
@@ -39,6 +46,7 @@ CSS_LINKS: tuple[str, ...] = (
     f"{CSS_SITE_DIR}/fonts.css",
     f"{CSS_SITE_DIR}/motion.css",
     f"{CSS_SITE_DIR}/forced-colors.css",
+    "lockup.css",
 )
 
 _LEADING_COMMENT = re.compile(r"\A\s*<!--.*?-->\s*", re.DOTALL)
@@ -86,11 +94,15 @@ def load_fragments() -> IdentityFragments:
 
 
 def copy_material(docs_dir: Path) -> Path:
-    """Copy the material derivation into a per-version site's docs/ directory."""
+    """Copy the material derivation and the host's lockup into a per-version site's docs/ directory."""
     target = docs_dir / MATERIAL_SITE_DIR
     if target.exists():
         shutil.rmtree(target)
     shutil.copytree(MATERIAL_DIR, target)
+    lockup = docs_dir / LOCKUP_SITE_DIR
+    lockup.mkdir(parents=True, exist_ok=True)
+    for name in ("lockup.svg", "lockup.css"):
+        shutil.copy2(HOST_DIR / name, lockup / name)
     return target
 
 

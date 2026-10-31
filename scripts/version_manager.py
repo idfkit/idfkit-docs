@@ -18,10 +18,6 @@ from scripts.config import LATEST_VERSION, version_to_short, version_to_title
 from scripts.identity import CSS_LINKS, PROPERTY_NAME, copy_css, copy_host_files, load_fragments
 from scripts.models import VersionEntry
 
-#: The plain lockup, idfkit-brand/marks/lockup.svg, drawn in currentColor; the picker sets the
-#: property name beside it in the label face.
-LOCKUP_SVG: str = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 338.36 80.78" role="img" aria-label="idfkit"><g transform="translate(-8.00 -8.00) scale(2.0000)"><path fill="currentColor" d="M4 15a3 3 0 0 1 3-3h17v12h12v17a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3Z"/><path fill="currentColor" d="M34 4h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></g><g transform="translate(104.00 2.61)"><path fill="currentColor" transform="translate(-5.32 77.39)" d="M5.62 0.00V-54.59H22.66V0.00ZM14.11 -60.99Q10.50 -60.99 7.91 -63.38Q5.32 -65.77 5.32 -69.19Q5.32 -72.61 7.91 -75.00Q10.50 -77.39 14.11 -77.39Q17.77 -77.39 20.36 -75.00Q22.95 -72.61 22.95 -69.19Q22.95 -65.77 20.36 -63.38Q17.77 -60.99 14.11 -60.99ZM50.21 0.78Q44.16 0.78 39.18 -2.37Q34.20 -5.52 31.27 -11.74Q28.34 -17.97 28.34 -27.25Q28.34 -36.82 31.39 -43.02Q34.44 -49.22 39.40 -52.25Q44.35 -55.27 50.06 -55.27Q54.41 -55.27 57.49 -53.78Q60.56 -52.29 62.54 -49.98Q64.52 -47.66 65.54 -45.21H65.93V-72.75H82.93V0.00H66.13V-8.84H65.54Q63.93 -5.13 60.20 -2.17Q56.46 0.78 50.21 0.78ZM56.02 -12.50Q60.86 -12.50 63.59 -16.53Q66.32 -20.56 66.32 -27.25Q66.32 -34.03 63.61 -37.99Q60.90 -41.94 56.02 -41.94Q51.09 -41.94 48.48 -37.92Q45.87 -33.89 45.87 -27.25Q45.87 -20.61 48.48 -16.55Q51.09 -12.50 56.02 -12.50ZM123.13 -54.59V-41.94H112.19V0.00H95.25V-41.94H86.07V-54.59H95.25V-57.52Q95.25 -66.89 100.42 -71.53Q105.60 -76.17 113.80 -76.17Q117.41 -76.17 120.59 -75.61Q123.76 -75.05 125.28 -74.61L122.54 -62.16Q121.56 -62.40 120.25 -62.62Q118.93 -62.84 117.61 -62.84Q114.58 -62.84 113.39 -61.45Q112.19 -60.06 112.19 -57.67V-54.59ZM128.17 0.00V-72.75H145.21V-34.86H145.99L161.62 -54.59H181.00L161.52 -30.76L181.79 0.00H162.11L148.83 -20.85L145.21 -16.55V0.00ZM183.95 0.00V-54.59H200.99V0.00ZM192.45 -60.99Q188.83 -60.99 186.24 -63.38Q183.66 -65.77 183.66 -69.19Q183.66 -72.61 186.24 -75.00Q188.83 -77.39 192.45 -77.39Q196.11 -77.39 198.70 -75.00Q201.28 -72.61 201.28 -69.19Q201.28 -65.77 198.70 -63.38Q196.11 -60.99 192.45 -60.99ZM238.21 -54.59V-41.94H228.40V-16.70Q228.40 -12.45 232.74 -12.45Q233.62 -12.45 235.21 -12.67Q236.80 -12.89 237.48 -13.04L239.68 -0.63Q236.80 0.20 234.11 0.49Q231.43 0.78 229.03 0.78Q220.34 0.78 215.85 -3.30Q211.36 -7.37 211.36 -15.19V-41.94H204.13V-54.59H211.36V-67.58H228.40V-54.59Z"/></g></svg>"""
-
 
 def generate_versions_json(versions: list[str], output_dir: Path) -> Path:
     """Generate the versions.json manifest for the built-in version selector.
@@ -154,15 +150,7 @@ a:focus-visible{{outline:2px solid var(--idfkit-color-focus);outline-offset:2px}
   width:100%;padding:var(--idfkit-space-8) var(--idfkit-space-3) var(--idfkit-space-6);text-align:center;
   background:var(--idfkit-color-surface);border-bottom:1px solid var(--idfkit-color-border);
 }}
-.lockup{{
-  display:inline-flex;align-items:baseline;gap:var(--idfkit-space-2);
-  color:var(--idfkit-color-ink);text-decoration:none;
-}}
-.lockup svg{{height:2rem;width:auto;display:block;align-self:center}}
-.lockup .property{{
-  font-family:var(--idfkit-font-code);font-size:1rem;letter-spacing:.04em;
-  color:var(--idfkit-color-ink-label);
-}}
+.hero .idfkit-lockup{{--idfkit-lockup-mark:2rem}}
 .rule{{
   width:var(--idfkit-space-8);height:4px;margin:var(--idfkit-space-3) auto 0;
   border-radius:var(--idfkit-radius-pill);background:var(--idfkit-gradient-brand);
@@ -242,10 +230,7 @@ footer{{
 </head>
 <body>
   <header class="hero">
-    <a class="lockup idfkit-mark" href="https://idfkit.com">
-      {LOCKUP_SVG}
-      <span class="property">{PROPERTY_NAME}</span>
-    </a>
+    <a class="idfkit-lockup" href="https://idfkit.com" aria-label="idfkit {PROPERTY_NAME}"></a>
     <div class="rule" aria-hidden="true"></div>
     <h1>EnergyPlus documentation</h1>
     <p class="subtitle">

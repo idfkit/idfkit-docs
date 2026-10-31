@@ -826,7 +826,8 @@ def generate_zensical_config(
         scheme["accent"] = "custom"
 
     # Version-specific overrides
-    project["site_name"] = f"{project.get('site_name', 'EnergyPlus Documentation')} - {version_title}"
+    # The lockup names the site, so the title beside it carries only what the lockup cannot: the version.
+    project["site_name"] = f"EnergyPlus {version_title}"
     project["site_url"] = "/"
 
     # Build navigation
