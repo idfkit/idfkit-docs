@@ -28,7 +28,7 @@
 /* Type pill — primary accent */
 .field-pill.pill-type {
   background: var(--md-accent-fg-color);
-  color: var(--md-accent-bg-color, #fff);
+  color: var(--md-accent-bg-color);
   font-weight: 600;
 }
 
@@ -62,18 +62,11 @@
 }
 
 .field-pill.pill-required {
-  background: hsla(15, 80%, 55%, 0.12);
-  color: hsl(15, 70%, 45%);
-  border-color: hsla(15, 70%, 55%, 0.3);
+  background: var(--md-code-bg-color);
+  color: var(--idfkit-color-status-error);
+  border-color: var(--idfkit-color-status-error);
   font-weight: 600;
   font-style: normal;
-}
-
-/* Dark mode override for Required */
-[data-md-color-scheme="slate"] .field-pill.pill-required {
-  background: hsla(15, 80%, 55%, 0.18);
-  color: hsl(15, 70%, 65%);
-  border-color: hsla(15, 70%, 55%, 0.35);
 }
 
 /* Choices row */

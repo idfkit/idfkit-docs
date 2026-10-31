@@ -3,7 +3,7 @@ site_name = "idfkit-docs"
 site_url = "https://docs.idfkit.com"
 site_description = "Comprehensive EnergyPlus documentation — Input/Output Reference, Engineering Reference, and more. Searchable, hyperlinked, and covering all versions."
 site_author = "Samuel Letellier-Duchesne"
-copyright = "Maintained by <a href='https://samuelduchesne.github.io'>samuelduchesne</a>."
+copyright = "An idfkit project. MIT License."
 repo_url = "https://github.com/idfkit/idfkit-docs"
 
 [project.plugins.meta]
@@ -28,22 +28,27 @@ features = [
     "toc.follow",
 ]
 
-[project.theme.icon]
-logo = "material/flash"
+# Fonts are self-hosted by the identity derivation (identity/material/fonts.css), so the theme loads
+# none from Google Fonts.
+font = false
 
+# The palette is identity/material/palette.yml transcribed to TOML: both schemes are custom and read
+# their colours from identity/material/material.css, which the generator appends to extra_css.
 [[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
 scheme = "default"
-primary = "teal"
-accent = "amber"
+primary = "custom"
+accent = "custom"
 
 [project.theme.palette.toggle]
 icon = "material/brightness-7"
 name = "Switch to dark mode"
 
 [[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
 scheme = "slate"
-primary = "teal"
-accent = "amber"
+primary = "custom"
+accent = "custom"
 
 [project.theme.palette.toggle]
 icon = "material/brightness-4"

@@ -1,12 +1,20 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://github.com/idfkit/idfkit-brand/releases/download/identity-2026.1/mark-on-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="https://github.com/idfkit/idfkit-brand/releases/download/identity-2026.1/mark-on-light.svg">
+    <img alt="idfkit" width="72" src="https://github.com/idfkit/idfkit-brand/releases/download/identity-2026.1/tile.svg">
+  </picture>
+</p>
+
 # idfkit-docs
 
-[![Release](https://img.shields.io/github/v/release/idfkit/idfkit-docs)](https://github.com/idfkit/idfkit-docs/releases)
-[![Build status](https://img.shields.io/github/actions/workflow/status/idfkit/idfkit-docs/main.yml?branch=main)](https://github.com/idfkit/idfkit-docs/actions/workflows/main.yml?query=branch%3Amain)
-[![License](https://img.shields.io/github/license/idfkit/idfkit-docs)](https://github.com/idfkit/idfkit-docs/blob/main/LICENSE)
+The EnergyPlus input and output reference, rendered by idfkit for every supported version.
 
-EnergyPlus documentation built with [Zensical](https://zensical.org/).
+[idfkit](https://idfkit.com) · [Developers](https://developers.idfkit.com) · [EnergyPlus docs](https://docs.idfkit.com) · [Envelop](https://app.idfkit.com) · [MCP](https://mcp.idfkit.com) · [Shoebox](https://shoebox.idfkit.com) · [GitHub](https://github.com/idfkit)
 
-**[Documentation](https://docs.idfkit.com/)** | **[GitHub](https://github.com/idfkit/idfkit-docs/)**
+[![Build status](https://img.shields.io/github/actions/workflow/status/idfkit/idfkit-docs/main.yml?branch=main)](https://github.com/idfkit/idfkit-docs/actions/workflows/main.yml?query=branch%3Amain) [![License](https://img.shields.io/github/license/idfkit/idfkit-docs)](https://github.com/idfkit/idfkit-docs/blob/main/LICENSE)
+
+EnergyPlus documentation built with [Zensical](https://zensical.org/). The site carries the idfkit visual identity at the level declared under `[tool.idfkit.identity]` in `pyproject.toml`; the derivation is vendored under `identity/` and served as idfkit-brand built it.
 
 ## Development
 

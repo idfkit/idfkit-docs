@@ -1,10 +1,10 @@
 .eq-tooltip {
   position: absolute;
   z-index: 1000;
-  background: var(--md-default-bg-color, #fff);
-  border: 1px solid var(--md-default-fg-color--lightest, #ddd);
+  background: var(--md-default-bg-color);
+  border: 1px solid var(--md-default-fg-color--lightest);
   border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--idfkit-elevation-overlay);
   padding: 12px 16px;
   max-width: 90vw;
   pointer-events: none;
@@ -26,9 +26,9 @@
   transform: translateX(-50%);
   width: 10px;
   height: 10px;
-  background: var(--md-default-bg-color, #fff);
-  border-right: 1px solid var(--md-default-fg-color--lightest, #ddd);
-  border-bottom: 1px solid var(--md-default-fg-color--lightest, #ddd);
+  background: var(--md-default-bg-color);
+  border-right: 1px solid var(--md-default-fg-color--lightest);
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
   transform: translateX(-50%) rotate(45deg);
 }
 

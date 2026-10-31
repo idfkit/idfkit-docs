@@ -51,3 +51,45 @@
   max-height: 500px;         /* large enough for any field list */
   opacity: 1;
 }
+
+/* ---------------------------------------------------------------------------
+ * Identity footer: the ownership line, the family links and the attribution
+ * sentence that scripts/convert.py installs in partials/copyright.html.
+ * Every colour reads through the theme's properties, which the vendored
+ * identity/material/material.css resolves from the identity tokens.
+ * -------------------------------------------------------------------------*/
+.idfkit-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.idfkit-family {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.8rem;
+}
+
+.idfkit-family a {
+  color: var(--md-footer-fg-color--light);
+}
+
+.idfkit-family a[aria-current="page"] {
+  color: var(--md-footer-fg-color);
+  font-weight: 600;
+}
+
+.idfkit-attribution {
+  color: var(--md-footer-fg-color--lighter);
+  max-width: 48rem;
+}
+
+/* ---------------------------------------------------------------------------
+ * Header mark in the dark scheme. The vendored identity/material/logo.svg is
+ * drawn in currentColor, which an <img> cannot inherit, so the theme's logo
+ * renders in the initial colour on every ground. Invert it on the dark scheme;
+ * the light scheme shows it as drawn.
+ * -------------------------------------------------------------------------*/
+[data-md-color-scheme="slate"] .md-header__button.md-logo img {
+  filter: invert(1);
+}

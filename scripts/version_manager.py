@@ -2,7 +2,8 @@
 
 Generates:
 - versions.json: Manifest read by Zensical's built-in version selector
-- Root index.html: Redirect to the latest version
+- Root index.html: The version picker, carrying the idfkit identity
+- The css derivation and the host's favicon set beside it
 """
 
 from __future__ import annotations
@@ -14,7 +15,12 @@ from dataclasses import asdict
 from pathlib import Path
 
 from scripts.config import LATEST_VERSION, version_to_short, version_to_title
+from scripts.identity import CSS_LINKS, PROPERTY_NAME, copy_css, copy_host_files, load_fragments
 from scripts.models import VersionEntry
+
+#: The plain lockup, idfkit-brand/marks/lockup.svg, drawn in currentColor; the picker sets the
+#: property name beside it in the label face.
+LOCKUP_SVG: str = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 338.36 80.78" role="img" aria-label="idfkit"><g transform="translate(-8.00 -8.00) scale(2.0000)"><path fill="currentColor" d="M4 15a3 3 0 0 1 3-3h17v12h12v17a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3Z"/><path fill="currentColor" d="M34 4h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></g><g transform="translate(104.00 2.61)"><path fill="currentColor" transform="translate(-5.32 77.39)" d="M5.62 0.00V-54.59H22.66V0.00ZM14.11 -60.99Q10.50 -60.99 7.91 -63.38Q5.32 -65.77 5.32 -69.19Q5.32 -72.61 7.91 -75.00Q10.50 -77.39 14.11 -77.39Q17.77 -77.39 20.36 -75.00Q22.95 -72.61 22.95 -69.19Q22.95 -65.77 20.36 -63.38Q17.77 -60.99 14.11 -60.99ZM50.21 0.78Q44.16 0.78 39.18 -2.37Q34.20 -5.52 31.27 -11.74Q28.34 -17.97 28.34 -27.25Q28.34 -36.82 31.39 -43.02Q34.44 -49.22 39.40 -52.25Q44.35 -55.27 50.06 -55.27Q54.41 -55.27 57.49 -53.78Q60.56 -52.29 62.54 -49.98Q64.52 -47.66 65.54 -45.21H65.93V-72.75H82.93V0.00H66.13V-8.84H65.54Q63.93 -5.13 60.20 -2.17Q56.46 0.78 50.21 0.78ZM56.02 -12.50Q60.86 -12.50 63.59 -16.53Q66.32 -20.56 66.32 -27.25Q66.32 -34.03 63.61 -37.99Q60.90 -41.94 56.02 -41.94Q51.09 -41.94 48.48 -37.92Q45.87 -33.89 45.87 -27.25Q45.87 -20.61 48.48 -16.55Q51.09 -12.50 56.02 -12.50ZM123.13 -54.59V-41.94H112.19V0.00H95.25V-41.94H86.07V-54.59H95.25V-57.52Q95.25 -66.89 100.42 -71.53Q105.60 -76.17 113.80 -76.17Q117.41 -76.17 120.59 -75.61Q123.76 -75.05 125.28 -74.61L122.54 -62.16Q121.56 -62.40 120.25 -62.62Q118.93 -62.84 117.61 -62.84Q114.58 -62.84 113.39 -61.45Q112.19 -60.06 112.19 -57.67V-54.59ZM128.17 0.00V-72.75H145.21V-34.86H145.99L161.62 -54.59H181.00L161.52 -30.76L181.79 0.00H162.11L148.83 -20.85L145.21 -16.55V0.00ZM183.95 0.00V-54.59H200.99V0.00ZM192.45 -60.99Q188.83 -60.99 186.24 -63.38Q183.66 -65.77 183.66 -69.19Q183.66 -72.61 186.24 -75.00Q188.83 -77.39 192.45 -77.39Q196.11 -77.39 198.70 -75.00Q201.28 -72.61 201.28 -69.19Q201.28 -65.77 198.70 -63.38Q196.11 -60.99 192.45 -60.99ZM238.21 -54.59V-41.94H228.40V-16.70Q228.40 -12.45 232.74 -12.45Q233.62 -12.45 235.21 -12.67Q236.80 -12.89 237.48 -13.04L239.68 -0.63Q236.80 0.20 234.11 0.49Q231.43 0.78 229.03 0.78Q220.34 0.78 215.85 -3.30Q211.36 -7.37 211.36 -15.19V-41.94H204.13V-54.59H211.36V-67.58H228.40V-54.59Z"/></g></svg>"""
 
 
 def generate_versions_json(versions: list[str], output_dir: Path) -> Path:
@@ -44,6 +50,12 @@ def generate_versions_json(versions: list[str], output_dir: Path) -> Path:
 def generate_root_landing(output_dir: Path, versions: list[str]) -> Path:
     """Generate the root landing page with a visual version picker.
 
+    The page reads every colour, font and easing through the vendored css derivation
+    (``identity/css/``), which :func:`copy_identity_root_files` places beside it, and carries the
+    host's head fragment, the lockup, the family links with this site marked current, the
+    attribution sentence and the ownership line (FR-028). Both themes follow the visitor's system
+    preference (FR-014).
+
     Args:
         output_dir: Root output directory for the site
         versions: Sorted list of version tags (newest first)
@@ -53,6 +65,8 @@ def generate_root_landing(output_dir: Path, versions: list[str]) -> Path:
     """
     latest_short = version_to_short(LATEST_VERSION)
     latest_title = version_to_title(LATEST_VERSION)
+    fragments = load_fragments()
+    css_links = "\n".join(f'<link rel="stylesheet" href="{href}">' for href in CSS_LINKS)
 
     # Build version cards HTML
     version_cards = []
@@ -81,36 +95,42 @@ def generate_root_landing(output_dir: Path, versions: list[str]) -> Path:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>EnergyPlus Documentation — All Versions | idfkit-docs</title>
-<meta name="description" content="Comprehensive EnergyPlus documentation for all versions (v8.9 through {latest_title}). Input/Output Reference, Engineering Reference, Getting Started guides, and more — searchable and hyperlinked.">
+<meta name="color-scheme" content="light dark">
+<title>EnergyPlus docs, every version | idfkit</title>
+<meta name="description" content="idfkit's rendering of the EnergyPlus documentation for every version (v8.9 through {latest_title}): Input/Output Reference, Engineering Reference, Getting Started guides and more, searchable and hyperlinked.">
 <meta name="keywords" content="EnergyPlus, documentation, building energy simulation, HVAC, Input Output Reference, Engineering Reference, energy modeling, idfkit">
 <link rel="canonical" href="https://docs.idfkit.com/">
 
+<!-- idfkit identity: the css derivation, linked before this page's own stylesheet -->
+{css_links}
+
+<!-- idfkit identity: hosts/docs.idfkit.com/head.html, inlined by scripts/version_manager.py -->
+{fragments.head}
+
 <!-- Open Graph -->
-<meta property="og:title" content="EnergyPlus Documentation — All Versions">
-<meta property="og:description" content="Comprehensive EnergyPlus documentation for all versions. Input/Output Reference, Engineering Reference, and more — searchable and hyperlinked.">
+<meta property="og:title" content="EnergyPlus docs, every version">
+<meta property="og:description" content="idfkit's rendering of the EnergyPlus documentation for every version. Input/Output Reference, Engineering Reference and more, searchable and hyperlinked.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://docs.idfkit.com/">
 <meta property="og:site_name" content="idfkit">
 <meta property="og:locale" content="en_US">
 
 <!-- Twitter Card -->
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="EnergyPlus Documentation — All Versions">
-<meta name="twitter:description" content="Comprehensive EnergyPlus documentation for all versions. Input/Output Reference, Engineering Reference, and more.">
+<meta name="twitter:title" content="EnergyPlus docs, every version">
+<meta name="twitter:description" content="idfkit's rendering of the EnergyPlus documentation for every version. Input/Output Reference, Engineering Reference and more.">
 
 <!-- JSON-LD Structured Data -->
 <script type="application/ld+json">
 {{
   "@context": "https://schema.org",
   "@type": "WebSite",
-  "name": "EnergyPlus Documentation",
+  "name": "EnergyPlus docs",
   "url": "https://docs.idfkit.com/",
-  "description": "Comprehensive EnergyPlus documentation for all versions — searchable and hyperlinked.",
+  "description": "idfkit's rendering of the EnergyPlus documentation for every version, searchable and hyperlinked.",
   "publisher": {{
-    "@type": "Person",
-    "name": "Samuel Letellier-Duchesne",
-    "url": "https://samuelduchesne.github.io"
+    "@type": "Organization",
+    "name": "idfkit",
+    "url": "https://idfkit.com"
   }},
   "isPartOf": {{
     "@type": "WebSite",
@@ -121,91 +141,99 @@ def generate_root_landing(output_dir: Path, versions: list[str]) -> Path:
 </script>
 
 <style>
+/* Every colour, font and easing below is a property of identity/css/tokens.css or fonts.css. */
 *,*::before,*::after{{box-sizing:border-box;margin:0;padding:0}}
-:root{{
-  --bg:#0a0e1a;--surface:#131829;--border:#1e2640;
-  --text:#e2e8f0;--dim:#64748b;--accent:#f59e0b;
-  --glow:rgba(245,158,11,.12);--latest:#22c55e;
-}}
 html{{height:100%}}
 body{{
-  min-height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-  background:var(--bg);color:var(--text);display:flex;flex-direction:column;
-  align-items:center;overflow-x:hidden;
+  min-height:100%;font-family:var(--idfkit-font-text);
+  background:var(--idfkit-color-ground);color:var(--idfkit-color-ink);
+  display:flex;flex-direction:column;align-items:center;overflow-x:hidden;
 }}
+a:focus-visible{{outline:2px solid var(--idfkit-color-focus);outline-offset:2px}}
 .hero{{
-  width:100%;padding:4rem 2rem 2rem;text-align:center;
-  background:linear-gradient(180deg,#111827 0%,var(--bg) 100%);
-  position:relative;overflow:hidden;
+  width:100%;padding:var(--idfkit-space-8) var(--idfkit-space-3) var(--idfkit-space-6);text-align:center;
+  background:var(--idfkit-color-surface);border-bottom:1px solid var(--idfkit-color-border);
 }}
-.hero::before{{
-  content:"";position:absolute;inset:0;
-  background:radial-gradient(ellipse 60% 50% at 50% 0%,rgba(245,158,11,.08),transparent);
-  pointer-events:none;
+.lockup{{
+  display:inline-flex;align-items:baseline;gap:var(--idfkit-space-2);
+  color:var(--idfkit-color-ink);text-decoration:none;
 }}
-.logo{{
-  font-size:clamp(1rem,2vw,1.2rem);letter-spacing:.35em;text-transform:uppercase;
-  color:var(--accent);font-weight:700;margin-bottom:1rem;
+.lockup svg{{height:2rem;width:auto;display:block;align-self:center}}
+.lockup .property{{
+  font-family:var(--idfkit-font-code);font-size:1rem;letter-spacing:.04em;
+  color:var(--idfkit-color-ink-label);
+}}
+.rule{{
+  width:var(--idfkit-space-8);height:4px;margin:var(--idfkit-space-3) auto 0;
+  border-radius:var(--idfkit-radius-pill);background:var(--idfkit-gradient-brand);
 }}
 h1{{
-  font-size:clamp(2.5rem,6vw,4.5rem);font-weight:800;
-  letter-spacing:-.03em;line-height:1.05;
-  background:linear-gradient(135deg,#fff 0%,#94a3b8 100%);
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
-  background-clip:text;
+  margin-top:var(--idfkit-space-3);font-size:clamp(2.25rem,6vw,4rem);
+  font-weight:var(--idfkit-font-weight-extrabold);letter-spacing:-.03em;line-height:1.05;
 }}
 .subtitle{{
-  margin-top:1rem;font-size:clamp(1rem,2vw,1.25rem);color:var(--dim);
-  max-width:540px;margin-inline:auto;line-height:1.6;
+  margin-top:var(--idfkit-space-2);font-size:clamp(1rem,2vw,1.2rem);color:var(--idfkit-color-ink-muted);
+  max-width:36rem;margin-inline:auto;line-height:1.6;
 }}
 .cta{{
-  display:inline-flex;align-items:center;gap:.5rem;
-  margin-top:2rem;padding:.85rem 2rem;
-  background:var(--accent);color:#0a0e1a;
-  font-weight:700;font-size:1.05rem;border-radius:10px;
-  text-decoration:none;transition:all .2s;
-  box-shadow:0 0 30px rgba(245,158,11,.25);
+  display:inline-flex;align-items:center;gap:var(--idfkit-space-1);
+  margin-top:var(--idfkit-space-4);padding:.85rem 2rem;
+  background:var(--idfkit-color-accent);color:var(--idfkit-color-accent-ink);
+  font-weight:var(--idfkit-font-weight-semibold);font-size:1.05rem;border-radius:var(--idfkit-radius-md);
+  text-decoration:none;box-shadow:var(--idfkit-elevation-raised);
+  transition:transform var(--idfkit-motion-duration-fast) var(--idfkit-motion-ease-out-quart),
+    box-shadow var(--idfkit-motion-duration-fast) var(--idfkit-motion-ease-out-quart);
 }}
-.cta:hover{{transform:translateY(-2px);box-shadow:0 0 40px rgba(245,158,11,.4)}}
+.cta:hover{{transform:translateY(-2px);box-shadow:var(--idfkit-elevation-overlay)}}
 .cta svg{{width:20px;height:20px}}
 .section-label{{
-  margin-top:3.5rem;margin-bottom:1.5rem;
-  font-size:.8rem;letter-spacing:.2em;text-transform:uppercase;
-  color:var(--dim);text-align:center;
+  margin-top:var(--idfkit-space-6);margin-bottom:var(--idfkit-space-3);
+  font-family:var(--idfkit-font-code);font-size:.8rem;font-weight:var(--idfkit-font-weight-medium);
+  letter-spacing:.15em;text-transform:uppercase;color:var(--idfkit-color-ink-label);text-align:center;
 }}
 .grid{{
   display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));
-  gap:.75rem;width:100%;max-width:820px;padding:0 2rem 4rem;
+  gap:var(--idfkit-space-2);width:100%;max-width:52rem;padding:0 var(--idfkit-space-3) var(--idfkit-space-8);
 }}
 .card{{
   position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  padding:1.25rem .75rem;border-radius:12px;
-  background:var(--surface);border:1px solid var(--border);
-  text-decoration:none;color:var(--text);
-  transition:all .2s;
-  animation:fadeUp .5s ease both;
+  padding:var(--idfkit-space-3) var(--idfkit-space-1);border-radius:var(--idfkit-radius-md);
+  background:var(--idfkit-color-surface);border:1px solid var(--idfkit-color-border);
+  text-decoration:none;color:var(--idfkit-color-ink);
+  transition:border-color var(--idfkit-motion-duration-fast) var(--idfkit-motion-ease-out-quart),
+    background var(--idfkit-motion-duration-fast) var(--idfkit-motion-ease-out-quart),
+    transform var(--idfkit-motion-duration-fast) var(--idfkit-motion-ease-out-quart),
+    box-shadow var(--idfkit-motion-duration-fast) var(--idfkit-motion-ease-out-quart);
+  animation:fadeUp var(--idfkit-motion-duration-slow) var(--idfkit-motion-ease-out-expo) both;
 }}
 .card:hover{{
-  border-color:var(--accent);background:#1a2035;
-  transform:translateY(-3px);
-  box-shadow:0 8px 30px rgba(0,0,0,.3),0 0 0 1px var(--accent);
+  border-color:var(--idfkit-color-accent);background:var(--idfkit-color-surface-raised);
+  transform:translateY(-3px);box-shadow:var(--idfkit-elevation-overlay);
 }}
-.card--latest{{border-color:rgba(34,197,94,.3);background:#0f1f15}}
-.card--latest:hover{{border-color:var(--latest);box-shadow:0 8px 30px rgba(0,0,0,.3),0 0 0 1px var(--latest)}}
-.card__version{{font-size:1.35rem;font-weight:700;font-variant-numeric:tabular-nums}}
-.card__era{{font-size:.7rem;color:var(--dim);margin-top:.25rem;letter-spacing:.05em}}
+.card--latest{{border-color:var(--idfkit-color-status-success)}}
+.card--latest:hover{{border-color:var(--idfkit-color-status-success)}}
+.card__version{{
+  font-family:var(--idfkit-font-code);font-size:1.3rem;font-weight:var(--idfkit-font-weight-bold);
+  font-variant-numeric:tabular-nums;
+}}
+.card__era{{font-size:.7rem;color:var(--idfkit-color-ink-label);margin-top:var(--idfkit-space-half);letter-spacing:.05em}}
 .badge{{
-  position:absolute;top:-.45rem;right:-.45rem;
-  background:var(--latest);color:#fff;
-  font-size:.55rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
-  padding:.2rem .5rem;border-radius:6px;
+  position:absolute;top:-.5rem;right:-.5rem;
+  background:var(--idfkit-color-status-success);color:var(--idfkit-color-primitive-white);
+  font-size:.55rem;font-weight:var(--idfkit-font-weight-bold);text-transform:uppercase;letter-spacing:.08em;
+  padding:.2rem .5rem;border-radius:var(--idfkit-radius-sm);
 }}
 footer{{
-  padding:2rem;text-align:center;font-size:.8rem;color:var(--dim);
-  border-top:1px solid var(--border);width:100%;margin-top:auto;
+  padding:var(--idfkit-space-4) var(--idfkit-space-3);text-align:center;font-size:.8rem;
+  color:var(--idfkit-color-ink-muted);border-top:1px solid var(--idfkit-color-border);
+  width:100%;margin-top:auto;
 }}
-footer a{{color:var(--accent);text-decoration:none}}
-footer a:hover{{text-decoration:underline}}
+.idfkit-family{{display:flex;flex-wrap:wrap;justify-content:center;gap:var(--idfkit-space-1) var(--idfkit-space-2)}}
+.idfkit-family a{{color:var(--idfkit-color-link);text-decoration:none}}
+.idfkit-family a:hover{{text-decoration:underline}}
+.idfkit-family a[aria-current="page"]{{color:var(--idfkit-color-ink);font-weight:var(--idfkit-font-weight-semibold)}}
+.idfkit-attribution{{margin:var(--idfkit-space-2) auto 0;max-width:40rem;line-height:1.5}}
+.idfkit-ownership{{margin-top:var(--idfkit-space-1);color:var(--idfkit-color-ink-label)}}
 @keyframes fadeUp{{
   from{{opacity:0;transform:translateY(12px)}}
   to{{opacity:1;transform:translateY(0)}}
@@ -213,30 +241,36 @@ footer a:hover{{text-decoration:underline}}
 </style>
 </head>
 <body>
-  <div class="hero">
-    <div class="logo">EnergyPlus</div>
-    <h1>Documentation</h1>
+  <header class="hero">
+    <a class="lockup idfkit-mark" href="https://idfkit.com">
+      {LOCKUP_SVG}
+      <span class="property">{PROPERTY_NAME}</span>
+    </a>
+    <div class="rule" aria-hidden="true"></div>
+    <h1>EnergyPlus documentation</h1>
     <p class="subtitle">
       Whole-building energy simulation. Every version, every reference, one place.
     </p>
     <a href="{latest_short}/" class="cta">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-           stroke-linecap="round" stroke-linejoin="round">
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M13 5l7 7-7 7M5 12h14"/>
       </svg>
       Open {latest_title}
     </a>
-  </div>
+  </header>
 
-  <div class="section-label">All versions</div>
-
-  <div class="grid">
+  <main>
+    <h2 class="section-label">All versions</h2>
+    <div class="grid">
     {cards_html}
-  </div>
+    </div>
+  </main>
 
   <footer>
-    Built with <a href="https://zensical.org">Zensical</a> &middot;
-    EnergyPlus is a trademark of the US Department of Energy
+    {fragments.family_links}
+    {fragments.attribution}
+    {fragments.ownership}
   </footer>
 </body>
 </html>
@@ -246,6 +280,12 @@ footer a:hover{{text-decoration:underline}}
     output_path.write_text(html)
 
     return output_path
+
+
+def copy_identity_root_files(deploy_dir: Path) -> None:
+    """Place the css derivation and the host's files where the picker and head.html point."""
+    copy_css(deploy_dir)
+    copy_host_files(deploy_dir)
 
 
 def generate_robots_txt(output_dir: Path) -> Path:
@@ -385,6 +425,7 @@ def deploy_single_version(version: str, build_dir: Path, deploy_dir: Path) -> No
 
     # Regenerate root files for all versions currently in dist/
     versions = _discover_versions(deploy_dir)
+    copy_identity_root_files(deploy_dir)
     generate_versions_json(versions, deploy_dir)
     generate_root_landing(deploy_dir, versions)
     generate_robots_txt(deploy_dir)
@@ -418,6 +459,7 @@ def merge_version_outputs(
 
     # Generate versions.json, landing page, robots.txt, and sitemap (newest first)
     versions = sorted(version_build_dirs.keys(), key=_version_sort_key, reverse=True)
+    copy_identity_root_files(deploy_dir)
     generate_versions_json(versions, deploy_dir)
     generate_root_landing(deploy_dir, versions)
     generate_robots_txt(deploy_dir)

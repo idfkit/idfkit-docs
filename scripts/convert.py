@@ -33,6 +33,7 @@ from scripts.config import (
     IMAGE_EXTENSIONS,
     version_to_title,
 )
+from scripts.identity import MATERIAL_EXTRA_CSS, MATERIAL_FAVICON, MATERIAL_LOGO, copy_material, load_fragments
 from scripts.latex_preprocessor import preprocess
 from scripts.markdown_postprocessor import postprocess
 from scripts.models import ConversionResult, DocSet, DocSetResult, LabelRef, VersionResult
@@ -56,6 +57,37 @@ logger = logging.getLogger(__name__)
 ROOT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "zensical.toml"
 FILTER_PATH = Path(__file__).parent / "pandoc_filters" / "energyplus.lua"
 ASSETS_DIR = Path(__file__).parent / "assets"
+
+#: The theme overrides directory the generated zensical.toml names, beside it in the build output.
+OVERRIDES_DIR_NAME = "overrides"
+
+#: The page template: the host's head fragment (favicons, theme colours, social image) on every page.
+_MAIN_TEMPLATE = """\
+{% extends "base.html" %}
+
+{% block extrahead %}
+  {# idfkit identity: hosts/docs.idfkit.com/head.html, inlined by scripts/convert.py. #}
+@@HEAD@@
+{% endblock %}
+"""
+
+#: The copyright partial: the ownership line, the family links with this site marked current, and
+#: the attribution sentence (FR-028), in place of the theme's copyright line.
+_COPYRIGHT_TEMPLATE = """\
+{# idfkit identity: material/footer.html and material/attribution.html, inlined by scripts/convert.py. #}
+<div class="md-copyright">
+  <div class="md-copyright__highlight idfkit-footer">
+@@FOOTER@@
+@@ATTRIBUTION@@
+  </div>
+  {% if not config.extra.generator == false %}
+    Made with
+    <a href="https://zensical.org/" target="_blank" rel="noopener">
+      Zensical
+    </a>
+  {% endif %}
+</div>
+"""
 
 
 def discover_doc_sets(source_dir: Path) -> list[DocSet]:
@@ -781,6 +813,18 @@ def generate_zensical_config(
 
     project = config.setdefault("project", {})
 
+    # The identity derivation (FR-028): the theme reads its colours and fonts from the vendored
+    # material.css, takes its mark and favicon from the vendored files, loads no font of its own, and
+    # keeps both schemes custom. The overrides directory is written by install_identity().
+    theme = project.setdefault("theme", {})
+    theme["logo"] = MATERIAL_LOGO
+    theme["favicon"] = MATERIAL_FAVICON
+    theme["custom_dir"] = OVERRIDES_DIR_NAME
+    theme["font"] = False
+    for scheme in theme.get("palette", []):
+        scheme["primary"] = "custom"
+        scheme["accent"] = "custom"
+
     # Version-specific overrides
     project["site_name"] = f"{project.get('site_name', 'EnergyPlus Documentation')} - {version_title}"
     project["site_url"] = "/"
@@ -851,7 +895,9 @@ def generate_zensical_config(
         {"path": "assets/eq-tooltips.js"},
         {"path": "assets/idf-editor.js", "defer": True},
     ]
+    # The derivation's stylesheets come first; the site's own read their values through its properties.
     project["extra_css"] = [
+        *MATERIAL_EXTRA_CSS,
         "assets/eq-tooltips.css",
         "assets/figures.css",
         "assets/idf-fields.css",
@@ -872,6 +918,35 @@ def copy_assets(output_dir: Path) -> None:
     for f in ASSETS_DIR.iterdir():
         if f.is_file():
             shutil.copy2(f, dst / f.name)
+
+
+def _indent(text: str, prefix: str) -> str:
+    return "\n".join(prefix + line if line else line for line in text.splitlines())
+
+
+def install_identity(output_dir: Path) -> None:
+    """Place the identity derivation in a per-version site.
+
+    Copies the vendored material derivation into docs/ and writes the theme overrides the generated
+    zensical.toml names: a page template whose head carries the host's favicons, theme colours and
+    social image, and a copyright partial carrying the ownership line, the family links with this
+    site marked current, and the attribution sentence (FR-028). The vendored files are copied as
+    they are; the fragments are inlined so that no override reads outside the build directory.
+    """
+    copy_material(output_dir / "docs")
+    fragments = load_fragments()
+    overrides = output_dir / OVERRIDES_DIR_NAME
+    partials = overrides / "partials"
+    partials.mkdir(parents=True, exist_ok=True)
+    (overrides / "main.html").write_text(
+        _MAIN_TEMPLATE.replace("@@HEAD@@", _indent(fragments.head, "  ")), encoding="utf-8"
+    )
+    (partials / "copyright.html").write_text(
+        _COPYRIGHT_TEMPLATE.replace("@@FOOTER@@", _indent(fragments.footer, "    ")).replace(
+            "@@ATTRIBUTION@@", _indent(fragments.attribution, "    ")
+        ),
+        encoding="utf-8",
+    )
 
 
 def build_site(output_dir: Path) -> tuple[bool, str]:
@@ -965,6 +1040,9 @@ def convert_version(
 
     # Copy static assets (MathJax config, equation tooltips, editor bundle)
     copy_assets(output_dir)
+
+    # Place the identity derivation and the theme overrides that include it
+    install_identity(output_dir)
 
     # Generate compact JSON schema for Monaco hover documentation
     if object_index:
