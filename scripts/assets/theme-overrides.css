@@ -101,7 +101,6 @@
   content: "";
   display: inline-block;
   height: 1.2rem;
-  transform: none;
 }
 
 .md-header .md-header__title .md-header__topic:first-child .md-ellipsis {
