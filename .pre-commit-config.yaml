@@ -1,3 +1,6 @@
+# The vendored identity derivation is served as idfkit-brand built it; no hook rewrites it.
+exclude: ^identity/
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: "v6.0.0"

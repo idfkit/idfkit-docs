@@ -51,3 +51,93 @@
   max-height: 500px;         /* large enough for any field list */
   opacity: 1;
 }
+
+/* ---------------------------------------------------------------------------
+ * Identity footer: the ownership line, the family links and the attribution
+ * sentence that scripts/convert.py installs in partials/copyright.html.
+ * Every colour reads through the theme's properties, which the vendored
+ * identity/material/material.css resolves from the identity tokens.
+ * -------------------------------------------------------------------------*/
+.idfkit-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.idfkit-family {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.8rem;
+}
+
+.idfkit-family a {
+  color: var(--md-footer-fg-color--light);
+}
+
+.idfkit-family a[aria-current="page"] {
+  color: var(--md-footer-fg-color);
+  font-weight: 600;
+}
+
+.idfkit-attribution {
+  color: var(--md-footer-fg-color--lighter);
+  max-width: 48rem;
+}
+
+/* The lockup replaces the site title, but this site's title carries the version the lockup cannot. It sits on the
+   lockup's baseline, as a quiet detail of it rather than a second title. The first topic is one line whose baseline
+   is the mark's lower edge: an inline block without text sits on the baseline by its margin edge, so the browser
+   places the version's baseline there and no offset depends on how an engine rounds the font's metrics. A zero line
+   height keeps the line the mark's own 1.2rem tall, the padding centres it in the 2.4rem header, and a zero font size
+   gives the whitespace in the markup no width. */
+.md-header .md-header__title .md-header__topic:first-child {
+  display: block;
+  padding-block: 0.6rem;
+  font-size: 0;
+  line-height: 0;
+}
+
+.md-header .md-header__title .md-header__topic:first-child::before {
+  content: "";
+  display: inline-block;
+  height: 1.2rem;
+}
+
+.md-header .md-header__title .md-header__topic:first-child .md-ellipsis {
+  display: inline;
+  overflow: visible;
+  visibility: visible;
+  font-size: 0.9rem;
+  font-weight: var(--idfkit-font-weight-regular);
+  color: var(--md-default-fg-color--light);
+}
+
+/* The drawer and the narrow header keep the version too. Here the first topic also draws the lockup, and the negative
+   margin takes the name's descenders out of the edge the baseline reads. */
+@media screen and (max-width: 76.234375em) {
+  .md-nav .md-nav__title[for="__drawer"] {
+    padding-inline: 1rem;
+    font-size: 0.8rem;
+    font-weight: var(--idfkit-font-weight-regular);
+    color: var(--md-default-fg-color--light);
+  }
+
+  .md-header .md-header__title .md-header__topic:first-child::before {
+    height: auto;
+    margin-block-end: calc(1.2rem * -0.3818);
+  }
+
+  .md-header .md-header__title .md-header__topic:first-child .md-ellipsis {
+    margin-inline-start: 0.4rem;
+  }
+}
+
+/* A phone has room for the mark and the version, but not for the whole lockup beside them. The lockup keeps its size
+   and is clipped to the mark, with a negative margin returning the rest of its width to the line. */
+@media screen and (max-width: 44.984375em) {
+  .md-header .md-header__title .md-header__topic:first-child::before {
+    width: calc(1.2rem * 15.9147);
+    margin-inline-end: calc(1.2rem * -14.9147);
+    clip-path: inset(0 calc(100% - 1.2rem) 0 0);
+  }
+}
