@@ -208,7 +208,7 @@ main{{width:100%;max-width:52rem}}
 .card__era{{font-size:.7rem;color:var(--idfkit-color-ink-label);margin-top:var(--idfkit-space-half);letter-spacing:.05em}}
 .badge{{
   position:absolute;top:-.5rem;right:-.5rem;
-  background:var(--idfkit-color-status-success);color:var(--idfkit-color-primitive-white);
+  background:var(--idfkit-color-status-success);color:var(--idfkit-color-ground);
   font-size:.55rem;font-weight:var(--idfkit-font-weight-bold);text-transform:uppercase;letter-spacing:.08em;
   padding:.2rem .5rem;border-radius:var(--idfkit-radius-sm);
 }}
