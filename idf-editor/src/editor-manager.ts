@@ -47,9 +47,16 @@ export class EditorManager {
   private observer: IntersectionObserver | null = null;
   private themeObserver: MutationObserver | null = null;
   private pendingBlocks: Map<Element, { wrapper: HTMLElement; code: string }> = new Map();
+  private onFirstEditor: (() => void) | undefined;
 
-  constructor(monaco: typeof Monaco) {
+  /**
+   * @param monaco - The loaded Monaco module.
+   * @param onFirstEditor - Called once, when the first editor on the page is
+   *   created; used to defer work that only an editor needs.
+   */
+  constructor(monaco: typeof Monaco, onFirstEditor?: () => void) {
     this.monaco = monaco;
+    this.onFirstEditor = onFirstEditor;
   }
 
   /**
@@ -184,6 +191,8 @@ export class EditorManager {
       contextmenu: false,
       links: false,
       renderValidationDecorations: 'off',
+      // Highlighting comes from the semantic tokens provider in idf-language.ts
+      'semanticHighlighting.enabled': true,
       // Render hover/suggestion widgets outside the editor so they aren't clipped
       fixedOverflowWidgets: true,
       // Accessibility for read-only blocks
@@ -195,6 +204,7 @@ export class EditorManager {
     this.addCopyButton(container, editor);
 
     // Track the editor
+    if (this.editors.length === 0) this.onFirstEditor?.();
     this.editors.push({ editor, container });
   }
 
@@ -271,7 +281,7 @@ export function loadMonacoFromCDN(): Promise<typeof Monaco> {
 
   monacoLoadPromise = new Promise((resolve, reject) => {
     // Check if Monaco is already loaded
-    const win = window as Record<string, unknown>;
+    const win = window as unknown as Record<string, unknown>;
     if (win.monaco) {
       resolve(win.monaco as typeof Monaco);
       return;
@@ -298,7 +308,7 @@ function configureAndLoadMonaco(
   resolve: (monaco: typeof Monaco) => void,
   reject: (error: Error) => void
 ): void {
-  const win = window as Record<string, unknown>;
+  const win = window as unknown as Record<string, unknown>;
   const require = win.require as {
     config: (opts: Record<string, unknown>) => void;
     (deps: string[], callback: (monaco: typeof Monaco) => void, errorback?: (err: Error) => void): void;

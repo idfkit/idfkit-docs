@@ -5,13 +5,17 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "dev": "vite build --watch"
+    "dev": "vite build --watch",
+    "typecheck": "tsc --noEmit -p ."
   },
   "dependencies": {
+    "@idfkit/core": "0.4.0",
+    "@idfkit/language": "0.4.0",
+    "@idfkit/schemas": "0.4.0",
     "monaco-editor": "0.55.1"
   },
   "devDependencies": {
-    "vite": "^6.0.7",
-    "typescript": "~5.7.2"
+    "typescript": "~5.7.2",
+    "vite": "^6.0.7"
   }
 }

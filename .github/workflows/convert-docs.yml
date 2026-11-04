@@ -109,7 +109,13 @@ jobs:
       - name: Compute cache key
         id: cache-key
         run: |
-          SCRIPTS_HASH=$(find scripts/ idf-editor/src/ -type f \( -name '*.py' -o -name '*.lua' -o -name '*.ts' -o -name '*.css' \) | sort | xargs sha256sum | sha256sum | cut -d' ' -f1)
+          # The editor bundle is built from idf-editor/src/ and from the @idfkit packages pinned in
+          # package.json and package-lock.json; vite.config.ts writes the pinned schema version into
+          # it. All of them are hashed, so that a package bump alone invalidates the cached site.
+          SCRIPTS_HASH=$( {
+            find scripts/ idf-editor/src/ -type f \( -name '*.py' -o -name '*.lua' -o -name '*.ts' -o -name '*.css' \)
+            printf '%s\n' idf-editor/package.json idf-editor/package-lock.json idf-editor/vite.config.ts
+          } | sort | xargs sha256sum | sha256sum | cut -d' ' -f1)
           echo "key=docs-${{ matrix.version }}-${SCRIPTS_HASH}" >> "$GITHUB_OUTPUT"
 
       - name: Cache built version

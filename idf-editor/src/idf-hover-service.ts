@@ -1,255 +1,138 @@
 /**
- * IDF Hover Documentation Service
+ * IDF hover documentation.
  *
- * Provides hover tooltips for IDF code blocks, showing IDD schema documentation
- * when the user hovers over object class names or field values.
- *
- * Extracted from the Envelop project (src/editor/idf-language-service.ts),
- * keeping only the hover-related functionality.
+ * What the cursor is on, and what the schema says about it, is answered by
+ * `explainAt` from `@idfkit/language`. This module only translates that answer
+ * into Monaco's hover shape: every fact shown is the package's, and the
+ * labels and their order are the only things decided here.
  */
 
+import { describeObjectType, type FieldDescription, type Schema } from '@idfkit/core';
+import { explainAt, type Explanation } from '@idfkit/language';
 import type * as Monaco from 'monaco-editor';
 import { IDF_LANGUAGE_ID } from './idf-language';
-import type { CompactIDDSchema, CompactIDDObjectType, CompactIDDField } from './types';
+import { currentProse, currentSchema } from './schema-source';
 
-/**
- * Register hover provider for IDF files.
- *
- * @param monaco - The Monaco editor instance
- * @param getSchema - Function that returns the current IDD schema (or null if not loaded)
- * @returns A disposable to unregister the provider
- */
-export function registerHoverProvider(
-  monaco: typeof Monaco,
-  getSchema: () => CompactIDDSchema | null
-): Monaco.IDisposable {
+/** Choices are listed inline up to this count, and as a bulleted list beyond it. */
+const INLINE_CHOICES = 5;
+
+/** Register the hover provider for IDF code blocks. */
+export function registerHoverProvider(monaco: typeof Monaco): Monaco.IDisposable {
   return monaco.languages.registerHoverProvider(IDF_LANGUAGE_ID, {
     provideHover(model, position): Monaco.languages.Hover | null {
-      const schema = getSchema();
-      if (!schema) {
-        return null;
-      }
+      const schema = currentSchema();
+      if (schema === undefined) return null;
 
-      const context = getHoverContext(model, position);
-      if (!context) {
-        return null;
-      }
+      const result = explainAt(model.getValue(), model.getOffsetAt(position), schema, currentProse());
+      if (result.status !== 'ok') return null;
 
-      const objectType = schema.objectTypes[context.className.toLowerCase()];
-      if (!objectType) {
-        return null;
-      }
+      const { explanation } = result;
+      const start = model.getPositionAt(explanation.region.start);
+      const end = model.getPositionAt(explanation.region.end);
 
-      // Hovering over class name
-      if (context.isClassName) {
-        return createObjectHover(objectType, position);
-      }
-
-      // Hovering over a field value
-      if (context.fieldIndex !== undefined && context.fieldIndex < objectType.fields.length) {
-        const field = objectType.fields[context.fieldIndex];
-        if (field) {
-          return createFieldHover(field, objectType);
-        }
-      }
-
-      return null;
+      return {
+        contents: hoverLines(explanation, schema).map((value) => ({ value })),
+        range: new monaco.Range(start.lineNumber, start.column, end.lineNumber, end.column),
+      };
     },
   });
 }
 
-/** Hover context describing what the cursor is over */
-interface HoverContext {
-  className: string;
-  isClassName: boolean;
-  fieldIndex?: number;
+/**
+ * Text escaped so that Markdown renders it literally.
+ *
+ * The schema's names and prose are plain text, but Monaco renders a hover as
+ * Markdown: unescaped, the placeholder in "a default Space named <Zone Name>"
+ * is removed as an HTML tag, and the asterisks in "Curve:* or Table:Lookup"
+ * become emphasis. CommonMark accepts a backslash before any ASCII punctuation
+ * character, so every character with a Markdown meaning is escaped.
+ */
+function literal(text: string): string {
+  return text.replace(/[\\`*_{}[\]()<>#+\-.!|~&]/g, '\\$&');
 }
 
-/** Get context for hover documentation at the given position */
-function getHoverContext(
-  model: Monaco.editor.ITextModel,
-  position: Monaco.Position
-): HoverContext | null {
-  const lineContent = model.getLineContent(position.lineNumber);
+/** The Markdown paragraphs a hover shows, in order. */
+function hoverLines(explanation: Explanation, schema: Schema): string[] {
+  const lines = explanation.of === 'objectType' ? objectLines(explanation, schema) : fieldLines(explanation);
 
-  // Check if we're hovering over a class name
-  const classMatch = lineContent.match(/^([A-Za-z][A-Za-z0-9:_-]*)\s*,/);
-  if (classMatch && classMatch[1]) {
-    const classNameEnd = classMatch[1].length;
-    if (position.column <= classNameEnd + 1) {
-      return { className: classMatch[1], isClassName: true };
-    }
+  if (explanation.docs !== undefined) {
+    lines.push(`[${literal(explanation.docs.label)}](${explanation.docs.url})`);
   }
-
-  // Find the current object
-  const objectContext = findCurrentObject(model, position);
-  if (objectContext) {
-    const fieldIndex = countFieldsSoFar(model, objectContext.startLine, position);
-    return {
-      className: objectContext.className,
-      isClassName: false,
-      fieldIndex,
-    };
-  }
-
-  return null;
+  return lines;
 }
 
-/** Find the current object context (class name and start line) */
-function findCurrentObject(
-  model: Monaco.editor.ITextModel,
-  position: Monaco.Position
-): { className: string; startLine: number } | null {
-  for (let line = position.lineNumber; line >= 1; line--) {
-    const lineContent = model.getLineContent(line);
+function objectLines(explanation: Explanation, schema: Schema): string[] {
+  const lines = [`**${literal(explanation.typeName)}**`];
+  if (explanation.prose !== undefined) lines.push(literal(explanation.prose));
 
-    // Look for class name pattern: "ClassName,"
-    const match = lineContent.match(/^([A-Za-z][A-Za-z0-9:_-]*)\s*,/);
-    if (match && match[1]) {
-      return { className: match[1], startLine: line };
-    }
-
-    // If we hit a semicolon, we've gone past our object
-    if (lineContent.includes(';') && line < position.lineNumber) {
-      break;
-    }
-  }
-
-  return null;
-}
-
-/** Count the number of fields (commas) from object start to current position */
-function countFieldsSoFar(
-  model: Monaco.editor.ITextModel,
-  startLine: number,
-  position: Monaco.Position
-): number {
-  let fieldCount = 0;
-
-  for (let line = startLine; line <= position.lineNumber; line++) {
-    const lineContent = model.getLineContent(line);
-    const endCol = line === position.lineNumber ? position.column - 1 : lineContent.length;
-    const text = lineContent.substring(0, endCol);
-
-    // Remove comments
-    const withoutComments = text.replace(/!.*$/, '');
-
-    // Count commas
-    const commas = (withoutComments.match(/,/g) || []).length;
-    fieldCount += commas;
-
-    // The first comma after class name is field 0's delimiter
-    if (line === startLine && commas > 0) {
-      fieldCount--;
-    }
-  }
-
-  return fieldCount;
-}
-
-/** Create hover content for an object type */
-function createObjectHover(
-  objectType: CompactIDDObjectType,
-  position: Monaco.Position
-): Monaco.languages.Hover {
-  const contents: Monaco.IMarkdownString[] = [];
-
-  // Title
-  contents.push({ value: `**${objectType.name}**` });
-
-  // Group
-  if (objectType.group) {
-    contents.push({ value: `*Group: ${objectType.group}*` });
-  }
-
-  // Memo
-  if (objectType.memo) {
-    contents.push({ value: objectType.memo });
-  }
-
-  // Properties
+  const description = describeObjectType(schema, explanation.typeName);
   const props: string[] = [];
-  if (objectType.isUnique) props.push('unique-object');
-  if (objectType.isRequired) props.push('required-object');
-  if (objectType.minFields > 0) props.push(`min-fields: ${String(objectType.minFields)}`);
-  if (objectType.extensible > 0) props.push(`extensible: ${String(objectType.extensible)}`);
-
-  if (props.length > 0) {
-    contents.push({ value: `\`${props.join(' | ')}\`` });
+  if (description.requiredFields.length > 0) props.push(`required fields: ${String(description.requiredFields.length)}`);
+  if (description.isExtensible && description.extensibleSize !== undefined) {
+    props.push(`extensible: ${String(description.extensibleSize)}`);
   }
-
-  return {
-    contents,
-    range: {
-      startLineNumber: position.lineNumber,
-      startColumn: 1,
-      endLineNumber: position.lineNumber,
-      endColumn: objectType.name.length + 1,
-    },
-  };
+  if (props.length > 0) lines.push(`\`${props.join(' | ')}\``);
+  return lines;
 }
 
-/** Create hover content for a field */
-function createFieldHover(
-  field: CompactIDDField,
-  objectType: CompactIDDObjectType
-): Monaco.languages.Hover {
-  const contents: Monaco.IMarkdownString[] = [];
+function fieldLines(explanation: Explanation): string[] {
+  const { field } = explanation;
+  const lines = [`**${literal(explanation.fieldName ?? '')}** (${literal(explanation.typeName)})`];
 
-  // Title
-  contents.push({ value: `**${field.name || field.id}** (${objectType.name})` });
-
-  // Type and units
-  let typeInfo = `Type: \`${field.type}\``;
-  if (field.units) {
-    typeInfo += ` | Units: \`${field.units}\``;
-  }
-  contents.push({ value: typeInfo });
-
-  // Memo
-  if (field.memo) {
-    contents.push({ value: field.memo });
+  if (field !== undefined) {
+    let typeInfo = field.fieldType !== undefined ? `Type: \`${field.fieldType}\`` : '';
+    if (field.units !== undefined) typeInfo += `${typeInfo ? ' | ' : ''}Units: \`${field.units}\``;
+    if (typeInfo) lines.push(typeInfo);
   }
 
-  // Range constraints
-  if (field.minimum !== undefined || field.maximum !== undefined) {
-    let range = 'Range: ';
-    if (field.minimum !== undefined) {
-      range += field.exclusiveMinimum ? `> ${String(field.minimum)}` : `>= ${String(field.minimum)}`;
-    }
-    if (field.minimum !== undefined && field.maximum !== undefined) {
-      range += ' and ';
-    }
-    if (field.maximum !== undefined) {
-      range += field.exclusiveMaximum ? `< ${String(field.maximum)}` : `<= ${String(field.maximum)}`;
-    }
-    contents.push({ value: range });
+  if (explanation.prose !== undefined) lines.push(literal(explanation.prose));
+  if (field === undefined) return lines;
+
+  const range = rangeText(field);
+  if (range !== undefined) lines.push(`Range: ${range}`);
+
+  if (field.default !== undefined) lines.push(`Default: \`${String(field.default)}\``);
+
+  // The schema lists an empty string among the choices of fields that may be left blank; a blank
+  // is not something a reader chooses, so it is not shown.
+  const choices = (field.enumValues ?? [])
+    .map((choice) => String(choice))
+    .filter((choice) => choice !== '')
+    .map((choice) => `\`${choice}\``);
+  if (choices.length > 0) {
+    lines.push(
+      choices.length <= INLINE_CHOICES
+        ? `Choices: ${choices.join(', ')}`
+        : `Choices (${String(choices.length)}):\n${choices.map((choice) => `- ${choice}`).join('\n')}`
+    );
   }
 
-  // Default value
-  if (field.default) {
-    contents.push({ value: `Default: \`${field.default}\`` });
+  if (field.isReference && field.objectList !== undefined && field.objectList.length > 0) {
+    lines.push(`References: ${field.objectList.map((name) => `\`${name}\``).join(', ')}`);
   }
 
-  // Choices — use a compact list when there are many options
-  if (field.choices && field.choices.length > 0) {
-    if (field.choices.length <= 5) {
-      contents.push({ value: `Choices: ${field.choices.map((c) => `\`${c}\``).join(', ')}` });
-    } else {
-      const list = field.choices.map((c) => `- \`${c}\``).join('\n');
-      contents.push({ value: `Choices (${String(field.choices.length)}):\n${list}` });
-    }
+  if (field.required) lines.push('`required`');
+  return lines;
+}
+
+/**
+ * The field's numeric bounds as text, or `undefined` when it has none.
+ *
+ * The schema states an exclusive bound either as a flag beside `minimum` or as
+ * the bound itself, and both forms are read here.
+ */
+function rangeText(field: FieldDescription): string | undefined {
+  const parts: string[] = [];
+
+  if (typeof field.exclusiveMinimum === 'number') parts.push(`> ${String(field.exclusiveMinimum)}`);
+  else if (field.minimum !== undefined) {
+    parts.push(`${field.exclusiveMinimum === true ? '>' : '>='} ${String(field.minimum)}`);
   }
 
-  // Properties
-  const props: string[] = [];
-  if (field.required) props.push('required');
-  if (field.autosizable) props.push('autosizable');
-  if (field.autocalculatable) props.push('autocalculatable');
-
-  if (props.length > 0) {
-    contents.push({ value: `\`${props.join(' | ')}\`` });
+  if (typeof field.exclusiveMaximum === 'number') parts.push(`< ${String(field.exclusiveMaximum)}`);
+  else if (field.maximum !== undefined) {
+    parts.push(`${field.exclusiveMaximum === true ? '<' : '<='} ${String(field.maximum)}`);
   }
 
-  return { contents };
+  return parts.length > 0 ? parts.join(' and ') : undefined;
 }

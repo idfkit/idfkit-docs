@@ -6,36 +6,26 @@
  * default and slate color schemes).
  */
 
-/** IDF theme token rules for dark mode */
+/** IDF theme rules for dark mode, keyed by the semantic token scopes in idf-language.ts */
 const idfDarkThemeRules: { token: string; foreground?: string; fontStyle?: string }[] = [
   { token: 'comment', foreground: '6A9955' },
   { token: 'comment.doc', foreground: '6A9955', fontStyle: 'italic' },
-  { token: 'type', foreground: '4EC9B0' },
-  { token: 'type.identifier', foreground: '4EC9B0', fontStyle: 'bold' },
-  { token: 'keyword', foreground: '569CD6' },
+  { token: 'type', foreground: '4EC9B0', fontStyle: 'bold' },
   { token: 'number', foreground: 'B5CEA8' },
-  { token: 'number.float', foreground: 'B5CEA8' },
   { token: 'string', foreground: 'CE9178' },
-  { token: 'string.date', foreground: 'DCDCAA' },
   { token: 'delimiter', foreground: 'D4D4D4' },
   { token: 'delimiter.semicolon', foreground: 'D4D4D4', fontStyle: 'bold' },
-  { token: 'constant', foreground: '4FC1FF' },
 ];
 
-/** IDF theme token rules for light mode */
+/** IDF theme rules for light mode, keyed by the semantic token scopes in idf-language.ts */
 const idfLightThemeRules: { token: string; foreground?: string; fontStyle?: string }[] = [
   { token: 'comment', foreground: '008000' },
   { token: 'comment.doc', foreground: '008000', fontStyle: 'italic' },
-  { token: 'type', foreground: '267F99' },
-  { token: 'type.identifier', foreground: '267F99', fontStyle: 'bold' },
-  { token: 'keyword', foreground: '0000FF' },
+  { token: 'type', foreground: '267F99', fontStyle: 'bold' },
   { token: 'number', foreground: '098658' },
-  { token: 'number.float', foreground: '098658' },
   { token: 'string', foreground: 'A31515' },
-  { token: 'string.date', foreground: '795E26' },
   { token: 'delimiter', foreground: '000000' },
   { token: 'delimiter.semicolon', foreground: '000000', fontStyle: 'bold' },
-  { token: 'constant', foreground: '0070C1' },
 ];
 
 /** Theme name constants */

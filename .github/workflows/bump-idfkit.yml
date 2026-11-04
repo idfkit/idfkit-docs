@@ -51,7 +51,7 @@ permissions:
 env:
   CONSUMER: idfkit-docs
   LIBRARY: python
-  GOVERNANCE_LEVEL: governance-2026.18
+  GOVERNANCE_LEVEL: governance-2026.31
 
 jobs:
   decline:

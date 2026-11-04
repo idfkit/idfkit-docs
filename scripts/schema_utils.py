@@ -1,18 +1,17 @@
 """Utilities for loading EnergyPlus schema metadata from idfkit.
 
-Provides unified data structures and functions that serve both:
-- Inline field metadata pills in the IO Reference (build-time HTML injection)
-- Monaco editor hover documentation (runtime JSON loaded by the browser)
+Provides the data structures and functions behind the inline field metadata
+pills in the IO Reference (build-time HTML injection). The IDF editor's hover
+documentation does not use them: it reads the published @idfkit/schemas
+package in the browser.
 
 Replaces custom IDD parsers by delegating to idfkit's bundled epJSON schemas.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 from idfkit import get_schema
@@ -28,15 +27,14 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class DocFieldInfo:
-    """Unified field metadata for documentation rendering.
+    """Field metadata for documentation rendering.
 
-    Populated from idfkit's epJSON schema.  Serves both the inline pill
-    generator (markdown_postprocessor) and the Monaco hover JSON serialiser.
+    Populated from idfkit's epJSON schema for the inline pill generator
+    (markdown_postprocessor).
     """
 
     name: str  # Human-readable display name (e.g. "Thermal Absorptance")
     snake_name: str  # Schema key (e.g. "thermal_absorptance")
-    field_id: str = ""  # Reconstructed IDD id (e.g. "A1", "N2")
     field_type: str = ""  # IDD-style: real, integer, alpha, choice, object-list, external-list
     units: str = ""
     ip_units: str = ""
@@ -49,7 +47,6 @@ class DocFieldInfo:
     autosizable: bool = False
     autocalculatable: bool = False
     keys: list[str] = field(default_factory=list)
-    notes: str = ""
 
 
 @dataclass
@@ -57,14 +54,8 @@ class DocObjectInfo:
     """Object-level schema metadata with field lookup by display name."""
 
     name: str  # Original case (e.g. "Pump:ConstantSpeed")
-    group: str = ""
-    memo: str = ""
     fields: list[DocFieldInfo] = field(default_factory=list)
     fields_by_display_name: dict[str, DocFieldInfo] = field(default_factory=dict, repr=False)
-    min_fields: int = 0
-    is_unique: bool = False
-    is_required: bool = False
-    extensible_size: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -131,25 +122,6 @@ def _resolve_idd_type(field_schema: dict[str, Any]) -> str:
     return "alpha"
 
 
-def _compute_field_ids(
-    field_names: list[str],
-    field_info: dict[str, Any],
-) -> dict[str, str]:
-    """Reconstruct IDD field IDs (A1, N1, ...) from legacy_idd metadata."""
-    alpha_count = 0
-    numeric_count = 0
-    ids: dict[str, str] = {}
-    for name in field_names:
-        ft = field_info.get(name, {}).get("field_type", "a")
-        if ft == "a":
-            alpha_count += 1
-            ids[name] = f"A{alpha_count}"
-        else:
-            numeric_count += 1
-            ids[name] = f"N{numeric_count}"
-    return ids
-
-
 _CHOICE_EXCLUDE = {"", "Autosize", "Autocalculate"}
 
 
@@ -168,7 +140,6 @@ def _build_doc_field(
     schema: EpJSONSchema,
     obj_type: str,
     field_info_map: dict[str, Any],
-    field_ids: dict[str, str],
     required_set: set[str],
 ) -> DocFieldInfo:
     """Build a single ``DocFieldInfo`` from the epJSON schema."""
@@ -223,7 +194,6 @@ def _build_doc_field(
     return DocFieldInfo(
         name=display_name,
         snake_name=snake_name,
-        field_id=field_ids.get(snake_name, ""),
         field_type=idd_type,
         units=field_schema.get("units", ""),
         ip_units=field_schema.get("ip-units", ""),
@@ -236,7 +206,6 @@ def _build_doc_field(
         autosizable=autosizable,
         autocalculatable=autocalculatable,
         keys=_extract_choices(field_schema),
-        notes=field_schema.get("note", ""),
     )
 
 
@@ -277,97 +246,19 @@ def build_object_index(version_tag: str) -> dict[str, DocObjectInfo]:
         inner = schema.get_inner_schema(obj_type)
         required_set: set[str] = set(inner.get("required", [])) if inner else set()
 
-        # Reconstruct IDD field IDs
-        field_ids = _compute_field_ids(all_field_names, field_info_map)
-
         # Build per-field metadata
         doc_fields: list[DocFieldInfo] = []
         fields_by_display: dict[str, DocFieldInfo] = {}
 
         for snake_name in all_field_names:
-            doc_field = _build_doc_field(snake_name, schema, obj_type, field_info_map, field_ids, required_set)
+            doc_field = _build_doc_field(snake_name, schema, obj_type, field_info_map, required_set)
             doc_fields.append(doc_field)
             fields_by_display[doc_field.name.lower()] = doc_field
 
-        # Object-level properties
         index[obj_type] = DocObjectInfo(
             name=obj_type,
-            group=obj_schema.get("group", ""),
-            memo=obj_schema.get("memo", ""),
             fields=doc_fields,
             fields_by_display_name=fields_by_display,
-            min_fields=obj_schema.get("min_fields", 0),
-            is_unique=obj_schema.get("maxProperties", 0) == 1,
-            is_required=False,
-            extensible_size=obj_schema.get("extensible_size", 0),
         )
 
     return index
-
-
-def serialize_for_monaco(
-    object_index: dict[str, DocObjectInfo],
-    version_tag: str,
-    output_path: Path,
-) -> bool:
-    """Serialize the object index to compact JSON for the Monaco hover provider.
-
-    Produces the ``CompactIDDSchema`` format expected by
-    ``idf-editor/src/types.ts``.
-    """
-    object_types: dict[str, dict[str, Any]] = {}
-
-    for _key, obj in object_index.items():
-        fields_json: list[dict[str, Any]] = []
-        for f in obj.fields:
-            fd: dict[str, Any] = {
-                "id": f.field_id,
-                "name": f.name,
-                "type": f.field_type,
-                "required": f.required,
-                "memo": f.notes,
-                "autosizable": f.autosizable,
-                "autocalculatable": f.autocalculatable,
-            }
-            if f.default:
-                fd["default"] = f.default
-            if f.units:
-                fd["units"] = f.units
-            if f.minimum:
-                fd["minimum"] = float(f.minimum)
-                if f.minimum_exclusive:
-                    fd["exclusiveMinimum"] = True
-            if f.maximum:
-                fd["maximum"] = float(f.maximum)
-                if f.maximum_exclusive:
-                    fd["exclusiveMaximum"] = True
-            if f.keys:
-                fd["choices"] = f.keys
-            fields_json.append(fd)
-
-        object_types[obj.name.lower()] = {
-            "name": obj.name,
-            "group": obj.group,
-            "memo": obj.memo,
-            "fields": fields_json,
-            "minFields": obj.min_fields,
-            "isUnique": obj.is_unique,
-            "isRequired": obj.is_required,
-            "extensible": obj.extensible_size,
-        }
-
-    schema_json: dict[str, Any] = {
-        "version": version_tag.lstrip("v"),
-        "objectTypes": object_types,
-    }
-
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(schema_json, separators=(",", ":")))
-
-    logger.info(
-        "Wrote Monaco schema JSON (%d object types, %.1f KB) to %s",
-        len(object_types),
-        output_path.stat().st_size / 1024,
-        output_path,
-    )
-    return True

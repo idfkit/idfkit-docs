@@ -2,18 +2,18 @@
  * IDF Editor — Main Entry Point
  *
  * Scans documentation pages for IDF code blocks and progressively replaces
- * them with rich Monaco editor instances featuring syntax highlighting,
- * hover documentation, and code folding.
+ * them with read-only Monaco editor instances featuring syntax highlighting
+ * and hover documentation.
  *
  * Monaco is loaded lazily from CDN only when IDF code blocks are present.
  */
 
 import './idf-editor.css';
 import { EditorManager, loadMonacoFromCDN } from './editor-manager';
-import { idfLanguageConfiguration, idfTokensProvider, IDF_LANGUAGE_ID } from './idf-language';
+import { registerIdfLanguage } from './idf-language';
 import { registerIDFThemes } from './idf-themes';
 import { registerHoverProvider } from './idf-hover-service';
-import { getSchema, loadSchema } from './idd-schema-loader';
+import { preloadSchema } from './schema-source';
 import type * as Monaco from 'monaco-editor';
 
 /** Whether the IDF language has been registered (once globally) */
@@ -32,21 +32,14 @@ let initInProgress = false;
 function registerLanguage(monaco: typeof Monaco): void {
   if (languageRegistered) return;
 
-  // Register language
-  monaco.languages.register({
-    id: IDF_LANGUAGE_ID,
-    extensions: ['.idf', '.imf'],
-    aliases: ['IDF', 'EnergyPlus IDF', 'Input Data File'],
-    mimetypes: ['text/x-idf'],
-  });
-  monaco.languages.setLanguageConfiguration(IDF_LANGUAGE_ID, idfLanguageConfiguration);
-  monaco.languages.setMonarchTokensProvider(IDF_LANGUAGE_ID, idfTokensProvider);
+  // Register language, configuration and semantic tokens (from @idfkit/core)
+  registerIdfLanguage(monaco);
 
   // Register themes
   registerIDFThemes(monaco);
 
-  // Register hover provider (schema may not be loaded yet; getSchema returns null until it is)
-  registerHoverProvider(monaco, getSchema);
+  // Register hover provider (answers nothing until the page's schema has loaded)
+  registerHoverProvider(monaco);
 
   languageRegistered = true;
 }
@@ -84,11 +77,10 @@ async function initPage(): Promise<void> {
     // Register language and providers (once)
     registerLanguage(monaco);
 
-    // Start loading IDD schema in the background (for hover docs)
-    loadSchema();
-
-    // Create editor manager and initialize editors
-    currentManager = new EditorManager(monaco);
+    // Create editor manager and initialize editors. The page's schema and prose
+    // (about 1 MB, for hover docs) are fetched only once the first editor is
+    // created, since editors are created lazily as their blocks scroll into view.
+    currentManager = new EditorManager(monaco, preloadSchema);
     currentManager.initialize(codeBlocks);
   } catch (error) {
     console.error('[idf-editor] Failed to initialize:', error);
@@ -102,7 +94,7 @@ async function initPage(): Promise<void> {
  * The document$ observable emits on each page navigation.
  */
 function hookInstantNav(): boolean {
-  const win = window as Record<string, unknown>;
+  const win = window as unknown as Record<string, unknown>;
   const document$ = win.document$ as { subscribe: (fn: () => void) => void } | undefined;
 
   if (!document$) return false;
