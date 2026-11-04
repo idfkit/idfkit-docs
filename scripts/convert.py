@@ -50,7 +50,7 @@ from scripts.rst_doc_sets import (
     resolve_rst_roles,
     rst_to_markdown,
 )
-from scripts.schema_utils import DocObjectInfo, build_object_index, serialize_for_monaco
+from scripts.schema_utils import DocObjectInfo, build_object_index
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +80,8 @@ _MAIN_TEMPLATE = """\
 {% block extrahead %}
   {# idfkit identity: hosts/docs.idfkit.com/head.html, inlined by scripts/convert.py. #}
 @@HEAD@@
+  {# The EnergyPlus version, read by the IDF editor to load the matching schema. #}
+  <meta name="idfkit:energyplus-version" content="{{ config.extra.energyplus_version }}">
 {% endblock %}
 """
 
@@ -861,6 +863,10 @@ def generate_zensical_config(
     extra = project.setdefault("extra", {})
     extra["version"] = {"provider": "mike", "default": "stable"}
 
+    # The EnergyPlus version this site documents, written into each page head by the main.html
+    # override. The IDF editor reads it to load the matching schema from @idfkit/schemas.
+    extra["energyplus_version"] = version.lstrip("v")
+
     # Tags for cmd-k search filtering
     extra["tags"] = {ds.title: ds.slug for ds in doc_sets}
 
@@ -1056,11 +1062,6 @@ def convert_version(
 
     # Place the identity derivation and the theme overrides that include it
     install_identity(output_dir)
-
-    # Generate compact JSON schema for Monaco hover documentation
-    if object_index:
-        schema_output = output_dir / "docs" / "assets" / "idd-schema.json"
-        serialize_for_monaco(object_index, version, schema_output)
 
     # Build site
     if not skip_build:

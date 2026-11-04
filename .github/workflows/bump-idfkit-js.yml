@@ -1,0 +1,309 @@
+name: bump-idfkit-js
+
+# Adopt a published idfkit-js release, as a pull request.
+#
+# idfkit-js's notify-downstream.yml dispatches this on every release, in the wave order the consumer
+# register gives. The register names this repository as a consumer of the scoped packages, so a
+# dispatch that finds no workflow of this name fails the release run. The shape follows envelop's
+# bump-idfkit-js.yml: move the level, run the gate, open a pull request either way, and never merge.
+#
+# WHAT MOVES. @idfkit/core, @idfkit/schemas and @idfkit/language in idf-editor/package.json, to the one
+# version, in the one change. They are one release, and a manifest holding two releases is half
+# adopted, which the self-check rejects and vite.config.ts refuses to build. The plan comes from
+# idfkit-conformance's tools/adoption.py so the rule lives in one place.
+#
+# WHAT ELSE MOVES. The editor bundle is committed under scripts/assets/ and fetches schema data from
+# jsDelivr at the version it was built with, so the gate rebuilds it and the pull request carries the
+# rebuilt bundle. A bump that left the bundle behind would change nothing a reader sees.
+#
+# TWO THINGS THAT CAN STOP AN ADOPTION BEING COMPLETE.
+#   1. A statement in this repository telling a user something is unavailable, resting on a parity
+#      entry this release closed. The pull request is opened as a draft listing each one, and this
+#      run fails, until the statement is removed or given an own_reason.
+#   2. A lag the register holds for this repository's javascript resolution. Reaching the released
+#      level closes it: the run dispatches record-adoption.yml in idfkit-conformance to open the
+#      paired pull request, with a token the organisation's GitHub App mints for that one repository,
+#      or prints the command when APP_ID and APP_PRIVATE_KEY are not set.
+#
+# DECLINING. Give `decline_reason` and nothing is bumped: the run records a deliberate lag in the
+# register instead. The reason states a policy, never a version.
+
+on:
+  workflow_dispatch:
+    inputs:
+      idfkit_js_version:
+        description: The released idfkit-js version to adopt, with or without a leading v.
+        required: true
+        type: string
+      decline_reason:
+        description: Decline the release instead, recording this policy as a deliberate lag.
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: bump-idfkit-js
+  cancel-in-progress: false
+
+env:
+  CONSUMER: idfkit-docs
+  LIBRARY: javascript
+  GOVERNANCE_LEVEL: governance-2026.31
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    env:
+      HAS_APP: ${{ secrets.APP_ID != '' && secrets.APP_PRIVATE_KEY != '' }}
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # The register and the adoption tools, at the tag the self-check pins. Full history, because
+      # the statement check reads the parity ledger at the two governance tags either side of this
+      # adoption.
+      - name: Check out the consumer register
+        uses: actions/checkout@v5
+        with:
+          repository: idfkit/idfkit-conformance
+          ref: refs/tags/${{ env.GOVERNANCE_LEVEL }}
+          path: governance
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: idf-editor/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Normalize version
+        id: ver
+        env:
+          RAW_VERSION: ${{ inputs.idfkit_js_version }}
+        run: |
+          set -euo pipefail
+          version="${RAW_VERSION#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::'$RAW_VERSION' is not a version. The level is an exact version, never a range."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "previous=$(node -p "require('./idf-editor/package.json').dependencies['@idfkit/core']")" >> "$GITHUB_OUTPUT"
+
+      # The consumer register lives in idfkit-conformance, so recording an adoption there is a dispatch
+      # into another repository. The organisation's GitHub App (idfkit-bot) mints a token for that one
+      # repository, valid for an hour, rather than a personal token stored for months. Without APP_ID
+      # and APP_PRIVATE_KEY this step is skipped and the steps below say what to run instead.
+      - name: Mint a token that can dispatch in idfkit-conformance
+        id: app-token
+        if: env.HAS_APP == 'true'
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: idfkit-conformance
+      - name: Decline, and record why
+        if: inputs.decline_reason != ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REASON: ${{ inputs.decline_reason }}
+        run: |
+          set -euo pipefail
+          command=(gh workflow run record-adoption.yml -R idfkit/idfkit-conformance
+                   -f consumer="$CONSUMER" -f library=javascript -f outcome=decline -f reason="$REASON")
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error title=Decline not recorded::No APP_ID/APP_PRIVATE_KEY, so the deliberate lag cannot be recorded from here. Run: ${command[*]}"
+            exit 1
+          fi
+          "${command[@]}"
+          echo "Declined ${{ steps.ver.outputs.version }}; record-adoption.yml opens the register pull request."
+
+      - name: Move every governed package to the release, in one change
+        if: inputs.decline_reason == ''
+        run: |
+          set -euo pipefail
+          python governance/tools/adoption.py plan-js --manifest idf-editor/package.json --version "${{ steps.ver.outputs.version }}"
+          npm install --prefix idf-editor --no-audit --no-fund
+
+      - name: Run the gate
+        id: gate
+        if: inputs.decline_reason == ''
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          {
+            npm run --prefix idf-editor typecheck &&
+            npm run --prefix idf-editor build &&
+            cp idf-editor/dist/idf-editor.js idf-editor/dist/idf-editor.css scripts/assets/
+          } 2>&1 | tee "$RUNNER_TEMP/gate-output.txt"
+
+      - name: Surface the statements this release makes false
+        id: statements
+        if: inputs.decline_reason == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          python governance/tools/adoption_statements.py --library javascript \
+            --from "${{ steps.ver.outputs.previous }}" --to "${{ steps.ver.outputs.version }}" \
+            --root . --conformance governance > "$RUNNER_TEMP/statements.txt" 2>&1
+          code=$?
+          cat "$RUNNER_TEMP/statements.txt"
+          case "$code" in
+            0) echo "surfaced=false" >> "$GITHUB_OUTPUT" ;;
+            1) echo "surfaced=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error title=Statements unknown::Could not tell which statements this release makes false, so the adoption cannot be called complete. See the output above."
+               exit 2 ;;
+          esac
+
+      # T119, FR-023: an adoption closes the register's lag only when it reaches the library's current
+      # level, the newest release of any kind. A bump to anything older, a manual dispatch of an earlier
+      # release say, moves the consumer forward and leaves it behind all the same, so the lag stays open.
+      # This step is identical in every consumer's bump workflow; change it everywhere or nowhere.
+      - name: Read whether the adopted level is the library's current level
+        id: current
+        env:
+          ADOPTED: ${{ steps.ver.outputs.version }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os, re, urllib.request
+
+          def norm(v):
+              v = v.strip().lower().removeprefix("v")
+              return re.sub(r"[.-]?(alpha|beta|a|b|rc|dev|post)[.-]?(\d*)", lambda m: {"alpha": "a", "beta": "b"}.get(m[1], m[1]) + m[2], v)
+
+          def key(v):
+              base, _, pre = norm(v).partition("rc")
+              nums = [int(x) for x in re.findall(r"\d+", re.split(r"[a-z]", base, maxsplit=1)[0])]
+              return (*nums, 0 if pre else 1, int(pre) if pre.isdigit() else 0)
+
+          if os.environ["LIBRARY"] == "python":
+              data = json.load(urllib.request.urlopen("https://pypi.org/pypi/idfkit/json", timeout=30))
+              versions = [v for v, files in data["releases"].items() if files]
+          else:
+              data = json.load(urllib.request.urlopen("https://registry.npmjs.org/@idfkit%2Fcore", timeout=30))
+              versions = list(data["versions"])
+          current = max(versions, key=key)
+          print(f"current={current}")
+          print(f"is_current={'true' if norm(current) == norm(os.environ['ADOPTED']) else 'false'}")
+          PY
+      - name: Read what the register holds for this repository
+        id: register
+        if: inputs.decline_reason == ''
+        env:
+          IS_CURRENT: ${{ steps.current.outputs.is_current }}
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import os, sys
+          from pathlib import Path
+          sys.path.insert(0, "governance/tools")
+          from consumers import Register
+          resolution = Register.load(Path("governance/governance/consumers.toml")).consumer(os.environ["CONSUMER"]).resolution("javascript")
+          lag = resolution.lag if resolution else None
+          current = os.environ["IS_CURRENT"] == "true"
+          print(f"lag={lag.kind if lag and current else ''}")
+          print(f"held={lag.kind if lag and not current else ''}")
+          print(f"issue={(lag.issue or '') if lag else ''}")
+          PY
+
+      - name: Write the pull request body
+        if: inputs.decline_reason == ''
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+          PREVIOUS: ${{ steps.ver.outputs.previous }}
+          GATE: ${{ steps.gate.outcome }}
+          SURFACED: ${{ steps.statements.outputs.surfaced }}
+          LAG: ${{ steps.register.outputs.lag }}
+          ISSUE: ${{ steps.register.outputs.issue }}
+          HELD: ${{ steps.register.outputs.held }}
+          CURRENT: ${{ steps.current.outputs.current }}
+        run: |
+          {
+            echo "idfkit-js $VERSION was released, so every governed @idfkit package moves from $PREVIOUS to $VERSION in one change."
+            echo
+            echo "- Gate (\`npm run typecheck\`, \`npm run build\` in idf-editor/): \`$GATE\`. The rebuilt bundle is in scripts/assets/."
+            echo "- Entry point: unchanged. This repository stays on the scoped packages, a supported door."
+            echo
+            if [ "$SURFACED" = true ]; then
+              echo "## Statements to review before this can merge"
+              echo
+              echo "This release closes a parity entry that a statement in this repository rests on. Remove each statement, or keep it with \`own_reason\` set so it stops citing the library."
+              echo
+              echo '```'
+              cat "$RUNNER_TEMP/statements.txt"
+              echo '```'
+              echo
+            fi
+            if [ -n "$LAG" ]; then
+              echo "## The register"
+              echo
+              echo "The consumer register records a \`$LAG\` lag for \`$CONSUMER\` ($ISSUE). This adoption closes it, and the register change is a paired pull request in idfkit-conformance."
+              if [ "$HAS_APP" != true ]; then
+                echo
+                echo "This run had no token to open it. Run:"
+                echo
+                echo '```bash'
+                echo "gh workflow run record-adoption.yml -R idfkit/idfkit-conformance -f consumer=$CONSUMER -f library=javascript -f outcome=close-lag"
+                echo '```'
+              fi
+              echo
+            fi
+            if [ -n "$HELD" ]; then
+              echo "## The register"
+              echo
+              echo "The consumer register records a \`$HELD\` lag for \`$CONSUMER\` ($ISSUE), and this adoption does not close it: \`$VERSION\` is not the library's current level, \`$CURRENT\`. The consumer moves forward and is still behind, so the lag stays open (FR-023)."
+              echo
+            fi
+            echo "Opened automatically by idfkit-js's notify-downstream.yml. It never merges itself."
+          } > "$RUNNER_TEMP/body.md"
+
+      - name: Open the pull request
+        id: pr
+        if: inputs.decline_reason == ''
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: bot/bump-idfkit-js-${{ steps.ver.outputs.version }}
+          # Only what this workflow writes. The register is checked out under governance/ in the same
+          # tree, and without this list it is committed as a gitlink that breaks every later checkout.
+          add-paths: |
+            idf-editor/package.json
+            idf-editor/package-lock.json
+            scripts/assets/idf-editor.js
+            scripts/assets/idf-editor.css
+          title: 'Adopt idfkit-js ${{ steps.ver.outputs.version }}'
+          commit-message: 'Adopt idfkit-js ${{ steps.ver.outputs.version }}'
+          body-path: ${{ runner.temp }}/body.md
+          draft: ${{ steps.statements.outputs.surfaced == 'true' }}
+          reviewers: samuelduchesne
+
+      - name: Record the closed lag in the register
+        if: inputs.decline_reason == '' && steps.register.outputs.lag != '' && steps.pr.outputs.pull-request-url != ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR: ${{ steps.pr.outputs.pull-request-url }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning title=Register not updated::No APP_ID/APP_PRIVATE_KEY; the command is in the pull request body."
+            exit 0
+          fi
+          gh workflow run record-adoption.yml -R idfkit/idfkit-conformance \
+            -f consumer="$CONSUMER" -f library=javascript -f outcome=close-lag -f adoption="$PR"
+
+      - name: An adoption with an unreviewed statement is not complete
+        if: steps.statements.outputs.surfaced == 'true'
+        run: |
+          echo "::error title=Adoption incomplete::A statement rests on a parity entry this release closed. The draft pull request lists it (FR-025)."
+          exit 1

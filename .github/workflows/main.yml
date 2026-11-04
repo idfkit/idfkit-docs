@@ -17,9 +17,9 @@ jobs:
   # is stated on `uses:` and again as the input, and the called workflow refuses the run unless the
   # two match, so moving it is one reviewed edit. It says nothing about whether the level is current.
   consumer-register:
-    uses: idfkit/idfkit-conformance/.github/workflows/check-consumer.yml@governance-2026.18
+    uses: idfkit/idfkit-conformance/.github/workflows/check-consumer.yml@governance-2026.31
     with:
-      governance_level: governance-2026.18
+      governance_level: governance-2026.31
 
   quality:
     runs-on: ubuntu-latest
