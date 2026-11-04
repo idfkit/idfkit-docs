@@ -6,7 +6,7 @@
       "runtimeExecutable": "bash",
       "runtimeArgs": [
         "-c",
-        "cd build/v25.2 && uv run zensical serve -a localhost:$PORT"
+        "cd build/v26.2 && uv run zensical serve -a localhost:$PORT"
       ],
       "port": 8000,
       "autoPort": true
