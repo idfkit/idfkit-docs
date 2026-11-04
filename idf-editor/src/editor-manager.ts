@@ -318,10 +318,53 @@ function configureAndLoadMonaco(
   require(
     ['vs/editor/editor.main'],
     (monaco: typeof Monaco) => {
-      resolve(monaco);
+      monacoStylesheetLoaded().then(() => resolve(monaco), reject);
     },
     (err: Error) => {
       reject(err);
     }
   );
+}
+
+/** How long to wait for Monaco's stylesheet before keeping the static code blocks */
+const STYLESHEET_TIMEOUT_MS = 10000;
+
+/**
+ * Wait for the stylesheet Monaco appends to the head.
+ *
+ * Monaco 0.55 adds `editor.main.css` as a `<link>` and returns the editor module without
+ * waiting for it. An editor created before the stylesheet applies, or after it failed to
+ * load, has no background, no line-number layout and a transparent hover, and stays so
+ * until the page is reloaded. Rejecting here leaves the Pygments blocks in place instead.
+ */
+function monacoStylesheetLoaded(): Promise<void> {
+  const link = Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')).find((l) =>
+    l.href.endsWith('/editor/editor.main.css')
+  );
+  if (!link) return Promise.reject(new Error('Monaco stylesheet not found'));
+  // A stylesheet's `sheet` is set once it has loaded, and stays null while it loads or after it fails.
+  if (link.sheet) return Promise.resolve();
+
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(
+      () => reject(new Error('Monaco stylesheet did not load in time')),
+      STYLESHEET_TIMEOUT_MS
+    );
+    link.addEventListener(
+      'load',
+      () => {
+        window.clearTimeout(timer);
+        resolve();
+      },
+      { once: true }
+    );
+    link.addEventListener(
+      'error',
+      () => {
+        window.clearTimeout(timer);
+        reject(new Error('Failed to load Monaco stylesheet'));
+      },
+      { once: true }
+    );
+  });
 }
