@@ -52,7 +52,7 @@ concurrency:
 env:
   CONSUMER: idfkit-docs
   LIBRARY: javascript
-  GOVERNANCE_LEVEL: governance-2026.18
+  GOVERNANCE_LEVEL: governance-2026.31
 
 jobs:
   bump:
