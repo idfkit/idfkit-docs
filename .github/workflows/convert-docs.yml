@@ -195,15 +195,12 @@ jobs:
           done
 
           # Discover all versions now in dist/ and regenerate root files
+          # One entry point for the root, so the identity files cannot be left out again.
           uv run python -c "
-          from scripts.version_manager import _discover_versions, generate_versions_json, generate_root_landing, generate_robots_txt, generate_sitemap
           from pathlib import Path
+          from scripts.version_manager import _discover_versions, generate_root_files
           dist = Path('dist')
-          versions = _discover_versions(dist)
-          generate_versions_json(versions, dist)
-          generate_root_landing(dist, versions)
-          generate_robots_txt(dist)
-          generate_sitemap(dist, versions)
+          generate_root_files(dist, _discover_versions(dist))
           "
 
       - name: Deploy to GitHub Pages
