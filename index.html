@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>EnergyPlus docs, every version | idfkit</title>
+<meta name="description" content="idfkit's rendering of the EnergyPlus documentation for every version (v8.9 through 26.2.0): Input/Output Reference, Engineering Reference, Getting Started guides and more, searchable and hyperlinked.">
+<meta name="keywords" content="EnergyPlus, documentation, building energy simulation, HVAC, Input Output Reference, Engineering Reference, energy modeling, idfkit">
+<link rel="canonical" href="https://docs.idfkit.com/">
+
+<!-- idfkit identity: the css derivation, linked before this page's own stylesheet -->
+<link rel="stylesheet" href="identity/css/tokens.css">
+<link rel="stylesheet" href="identity/css/fonts.css">
+<link rel="stylesheet" href="identity/css/motion.css">
+<link rel="stylesheet" href="identity/css/forced-colors.css">
+<link rel="stylesheet" href="lockup.css">
+
+<!-- idfkit identity: hosts/docs.idfkit.com/head.html, inlined by scripts/version_manager.py -->
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#060a14">
+<meta property="og:image" content="https://docs.idfkit.com/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://docs.idfkit.com/og.png">
+
+<!-- Open Graph -->
+<meta property="og:title" content="EnergyPlus docs, every version">
+<meta property="og:description" content="idfkit's rendering of the EnergyPlus documentation for every version. Input/Output Reference, Engineering Reference and more, searchable and hyperlinked.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://docs.idfkit.com/">
+<meta property="og:site_name" content="idfkit">
+<meta property="og:locale" content="en_US">
+
+<!-- Twitter Card -->
+<meta name="twitter:title" content="EnergyPlus docs, every version">
+<meta name="twitter:description" content="idfkit's rendering of the EnergyPlus documentation for every version. Input/Output Reference, Engineering Reference and more.">
+
+<!-- JSON-LD Structured Data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "EnergyPlus docs",
+  "url": "https://docs.idfkit.com/",
+  "description": "idfkit's rendering of the EnergyPlus documentation for every version, searchable and hyperlinked.",
+  "publisher": {
+    "@type": "Organization",
+    "name": "idfkit",
+    "url": "https://idfkit.com"
+  },
+  "isPartOf": {
+    "@type": "WebSite",
+    "name": "idfkit",
+    "url": "https://idfkit.com"
+  }
+}
+</script>
+
+<style>
+/* Every colour, font and easing below is a property of identity/css/tokens.css or fonts.css. */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{height:100%}
+body{
+  min-height:100%;font-family:var(--idfkit-font-text);
+  background:var(--idfkit-color-ground);color:var(--idfkit-color-ink);
+  display:flex;flex-direction:column;align-items:center;overflow-x:hidden;
+}
+a:focus-visible{outline:2px solid var(--idfkit-color-focus);outline-offset:2px}
+.hero{
+  width:100%;padding:var(--idfkit-space-8) var(--idfkit-space-3) var(--idfkit-space-6);text-align:center;
+  background:var(--idfkit-color-surface);border-bottom:1px solid var(--idfkit-color-border);
+}
+.hero .idfkit-lockup{--idfkit-lockup-mark:2rem}
+.rule{
+  width:var(--idfkit-space-8);height:4px;margin:var(--idfkit-space-3) auto 0;
+  border-radius:var(--idfkit-radius-pill);background:var(--idfkit-gradient-brand);
+}
+h1{
+  margin-top:var(--idfkit-space-3);font-size:clamp(2.25rem,6vw,4rem);
+  font-weight:var(--idfkit-font-weight-extrabold);letter-spacing:-.03em;line-height:1.05;
+}
+.subtitle{
+  margin-top:var(--idfkit-space-2);font-size:clamp(1rem,2vw,1.2rem);color:var(--idfkit-color-ink-muted);
+  max-width:36rem;margin-inline:auto;line-height:1.6;
+}
+.cta{
+  display:inline-flex;align-items:center;gap:var(--idfkit-space-1);
+  margin-top:var(--idfkit-space-4);padding:.85rem 2rem;
+  background:var(--idfkit-color-accent);color:var(--idfkit-color-accent-ink);
+  font-weight:var(--idfkit-font-weight-semibold);font-size:1.05rem;border-radius:var(--idfkit-radius-md);
+  text-decoration:none;box-shadow:var(--idfkit-elevation-raised);
+  transition:transform var(--idfkit-motion-duration-fast) var(--idfkit-motion-ease-out-quart),
+    box-shadow var(--idfkit-motion-duration-fast) var(--idfkit-motion-ease-out-quart);
+}
+.cta:hover{transform:translateY(-2px);box-shadow:var(--idfkit-elevation-overlay)}
+.cta svg{width:20px;height:20px}
+main{width:100%;max-width:52rem}
+.section-label{
+  margin-top:var(--idfkit-space-6);margin-bottom:var(--idfkit-space-3);
+  font-family:var(--idfkit-font-code);font-size:.8rem;font-weight:var(--idfkit-font-weight-medium);
+  letter-spacing:.15em;text-transform:uppercase;color:var(--idfkit-color-ink-label);text-align:center;
+}
+.grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));
+  gap:var(--idfkit-space-2);width:100%;max-width:52rem;padding:0 var(--idfkit-space-3) var(--idfkit-space-8);
+}
+.card{
+  position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:var(--idfkit-space-3) var(--idfkit-space-1);border-radius:var(--idfkit-radius-md);
+  background:var(--idfkit-color-surface);border:1px solid var(--idfkit-color-border);
+  text-decoration:none;color:var(--idfkit-color-ink);
+  transition:border-color var(--idfkit-motion-duration-fast) var(--idfkit-motion-ease-out-quart),
+    background var(--idfkit-motion-duration-fast) var(--idfkit-motion-ease-out-quart),
+    transform var(--idfkit-motion-duration-fast) var(--idfkit-motion-ease-out-quart),
+    box-shadow var(--idfkit-motion-duration-fast) var(--idfkit-motion-ease-out-quart);
+  animation:fadeUp var(--idfkit-motion-duration-slow) var(--idfkit-motion-ease-out-expo) both;
+}
+.card:hover{
+  border-color:var(--idfkit-color-accent);background:var(--idfkit-color-surface-raised);
+  transform:translateY(-3px);box-shadow:var(--idfkit-elevation-overlay);
+}
+.card--latest{border-color:var(--idfkit-color-status-success)}
+.card--latest:hover{border-color:var(--idfkit-color-status-success)}
+.card__version{
+  font-family:var(--idfkit-font-code);font-size:1.3rem;font-weight:var(--idfkit-font-weight-bold);
+  font-variant-numeric:tabular-nums;
+}
+.card__era{font-size:.7rem;color:var(--idfkit-color-ink-label);margin-top:var(--idfkit-space-half);letter-spacing:.05em}
+.badge{
+  position:absolute;top:-.5rem;right:-.5rem;
+  background:var(--idfkit-color-status-success);color:var(--idfkit-color-ground);
+  font-size:.55rem;font-weight:var(--idfkit-font-weight-bold);text-transform:uppercase;letter-spacing:.08em;
+  padding:.2rem .5rem;border-radius:var(--idfkit-radius-sm);
+}
+footer{
+  padding:var(--idfkit-space-4) var(--idfkit-space-3);text-align:center;font-size:.8rem;
+  color:var(--idfkit-color-ink-muted);border-top:1px solid var(--idfkit-color-border);
+  width:100%;margin-top:auto;
+}
+.idfkit-family{display:flex;flex-wrap:wrap;justify-content:center;gap:var(--idfkit-space-1) var(--idfkit-space-2)}
+.idfkit-family a{color:var(--idfkit-color-link);text-decoration:none}
+.idfkit-family a:hover{text-decoration:underline}
+.idfkit-family a[aria-current="page"]{color:var(--idfkit-color-ink);font-weight:var(--idfkit-font-weight-semibold)}
+.idfkit-attribution{margin:var(--idfkit-space-2) auto 0;max-width:40rem;line-height:1.5}
+.idfkit-ownership{margin-top:var(--idfkit-space-1);color:var(--idfkit-color-ink-label)}
+@keyframes fadeUp{
+  from{opacity:0;transform:translateY(12px)}
+  to{opacity:1;transform:translateY(0)}
+}
+</style>
+</head>
+<body>
+  <header class="hero">
+    <a class="idfkit-lockup" href="https://idfkit.com" aria-label="idfkit EnergyPlus docs"></a>
+    <div class="rule" aria-hidden="true"></div>
+    <h1>EnergyPlus documentation</h1>
+    <p class="subtitle">
+      Whole-building energy simulation. Every version, every reference, one place.
+    </p>
+    <a href="v26.2/" class="cta">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M13 5l7 7-7 7M5 12h14"/>
+      </svg>
+      Open 26.2.0
+    </a>
+  </header>
+
+  <main>
+    <h2 class="section-label">All versions</h2>
+    <div class="grid">
+    <a href="v26.2/" class="card card--latest" style="animation-delay:0.00s"><span class="card__version">26.2.0</span><span class="card__era">2026</span><span class="badge">latest</span></a>
+        <a href="v26.1/" class="card" style="animation-delay:0.04s"><span class="card__version">26.1.0</span><span class="card__era">2026</span></a>
+        <a href="v25.2/" class="card" style="animation-delay:0.08s"><span class="card__version">25.2.0</span><span class="card__era">2025</span></a>
+        <a href="v25.1/" class="card" style="animation-delay:0.12s"><span class="card__version">25.1.0</span><span class="card__era">2025</span></a>
+        <a href="v24.2/" class="card" style="animation-delay:0.16s"><span class="card__version">24.2.0</span><span class="card__era">2024</span></a>
+        <a href="v24.1/" class="card" style="animation-delay:0.20s"><span class="card__version">24.1.0</span><span class="card__era">2024</span></a>
+        <a href="v23.2/" class="card" style="animation-delay:0.24s"><span class="card__version">23.2.0</span><span class="card__era">2023</span></a>
+        <a href="v23.1/" class="card" style="animation-delay:0.28s"><span class="card__version">23.1.0</span><span class="card__era">2023</span></a>
+        <a href="v22.2/" class="card" style="animation-delay:0.32s"><span class="card__version">22.2.0</span><span class="card__era">2022</span></a>
+        <a href="v22.1/" class="card" style="animation-delay:0.36s"><span class="card__version">22.1.0</span><span class="card__era">2022</span></a>
+        <a href="v9.6/" class="card" style="animation-delay:0.40s"><span class="card__version">9.6.0</span><span class="card__era">v9</span></a>
+        <a href="v9.5/" class="card" style="animation-delay:0.44s"><span class="card__version">9.5.0</span><span class="card__era">v9</span></a>
+        <a href="v9.4/" class="card" style="animation-delay:0.48s"><span class="card__version">9.4.0</span><span class="card__era">v9</span></a>
+        <a href="v9.3/" class="card" style="animation-delay:0.52s"><span class="card__version">9.3.0</span><span class="card__era">v9</span></a>
+        <a href="v9.2/" class="card" style="animation-delay:0.56s"><span class="card__version">9.2.0</span><span class="card__era">v9</span></a>
+        <a href="v9.1/" class="card" style="animation-delay:0.60s"><span class="card__version">9.1.0</span><span class="card__era">v9</span></a>
+        <a href="v9.0/" class="card" style="animation-delay:0.64s"><span class="card__version">9.0.0</span><span class="card__era">v9</span></a>
+        <a href="v8.9/" class="card" style="animation-delay:0.68s"><span class="card__version">8.9.0</span><span class="card__era">v8</span></a>
+    </div>
+  </main>
+
+  <footer>
+    <nav aria-label="idfkit" class="idfkit-family">
+  <a href="https://idfkit.com">idfkit</a>
+  <a href="https://developers.idfkit.com">Developers</a>
+  <a href="https://docs.idfkit.com" aria-current="page">EnergyPlus docs</a>
+  <a href="https://app.idfkit.com">Envelop</a>
+  <a href="https://mcp.idfkit.com">MCP</a>
+  <a href="https://shoebox.idfkit.com">Shoebox</a>
+  <a href="https://github.com/idfkit">GitHub</a>
+</nav>
+    <p class="idfkit-attribution">This site is idfkit's rendering of the EnergyPlus documentation. The content is the EnergyPlus project's, reproduced under its licence; idfkit is not affiliated with, nor endorsed by, the EnergyPlus project or the U.S. Department of Energy.</p>
+    <p class="idfkit-ownership">An idfkit project.</p>
+  </footer>
+</body>
+</html>
