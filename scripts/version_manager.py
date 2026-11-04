@@ -274,6 +274,27 @@ def copy_identity_root_files(deploy_dir: Path) -> None:
     copy_host_files(deploy_dir)
 
 
+def generate_root_files(deploy_dir: Path, versions: list[str]) -> None:
+    """Write every file the site root serves beside the version directories.
+
+    This is the only entry point for the root. The landing page links the css
+    derivation, ``lockup.css`` and the host's favicon set, and every version's
+    head links the favicon set at ``/``; a caller that writes the landing page
+    without copying those files publishes a page whose stylesheets all answer
+    404, which is what the deploy job's own inline copy of this list did from
+    identity-2026.2 until this function replaced it.
+
+    Args:
+        deploy_dir: Root deployment directory (e.g., dist/)
+        versions: Version tags present in ``deploy_dir``, newest first
+    """
+    copy_identity_root_files(deploy_dir)
+    generate_versions_json(versions, deploy_dir)
+    generate_root_landing(deploy_dir, versions)
+    generate_robots_txt(deploy_dir)
+    generate_sitemap(deploy_dir, versions)
+
+
 def generate_robots_txt(output_dir: Path) -> Path:
     """Generate robots.txt for the documentation site.
 
@@ -410,12 +431,7 @@ def deploy_single_version(version: str, build_dir: Path, deploy_dir: Path) -> No
     shutil.copytree(site_dir, target)
 
     # Regenerate root files for all versions currently in dist/
-    versions = _discover_versions(deploy_dir)
-    copy_identity_root_files(deploy_dir)
-    generate_versions_json(versions, deploy_dir)
-    generate_root_landing(deploy_dir, versions)
-    generate_robots_txt(deploy_dir)
-    generate_sitemap(deploy_dir, versions)
+    generate_root_files(deploy_dir, _discover_versions(deploy_dir))
 
 
 def merge_version_outputs(
@@ -444,9 +460,4 @@ def merge_version_outputs(
         shutil.copytree(site_dir, target)
 
     # Generate versions.json, landing page, robots.txt, and sitemap (newest first)
-    versions = sorted(version_build_dirs.keys(), key=_version_sort_key, reverse=True)
-    copy_identity_root_files(deploy_dir)
-    generate_versions_json(versions, deploy_dir)
-    generate_root_landing(deploy_dir, versions)
-    generate_robots_txt(deploy_dir)
-    generate_sitemap(deploy_dir, versions)
+    generate_root_files(deploy_dir, sorted(version_build_dirs.keys(), key=_version_sort_key, reverse=True))
