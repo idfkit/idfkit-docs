@@ -154,7 +154,13 @@ A reusable action at `.github/actions/setup-python-env/action.yml` handles Pytho
 
 ## IDF Editor (Monaco) Development
 
-The `idf-editor/` directory contains a TypeScript/Vite project that builds a browser-side Monaco editor bundle for IDF code blocks. When making CSS or JS changes to the editor:
+The `idf-editor/` directory contains a TypeScript/Vite project that builds a browser-side Monaco editor bundle for IDF code blocks. It owns no IDF grammar or schema format of its own:
+
+- **Highlighting**: `scanIdf` and `classify` from `@idfkit/core`, delivered as Monaco semantic tokens (`src/idf-language.ts`).
+- **Hover documentation**: `explainAt` from `@idfkit/language` (`src/idf-hover-service.ts`).
+- **Schemas and prose**: `SchemaBundle` from `@idfkit/schemas`, fetching the package's data files from jsDelivr at the installed version (`src/schema-source.ts`). The page's EnergyPlus version comes from the `idfkit:energyplus-version` meta tag that `scripts/convert.py` writes into every page.
+
+Run `npm run typecheck` in `idf-editor/` after any change. When making CSS or JS changes to the editor:
 
 1. **Edit source** in `idf-editor/src/` (e.g., `editor-manager.ts`, `idf-editor.css`)
 2. **Build the bundle:** `cd idf-editor && npm run build`
@@ -188,8 +194,13 @@ This repository is `idfkit-docs` in the consumer register, `governance/consumers
 idfkit-conformance, read at the governance tag pinned in `.github/workflows/main.yml`. The register
 records where the idfkit level is declared and never the level itself.
 
-- **Where the level lives**: the exact `idfkit==X` pin in `project.dependencies` of `pyproject.toml`,
-  and nowhere else. Bumping it needs no register change.
+- **Where the levels live**: two libraries, two places.
+  - Python: the exact `idfkit==X` pin in `project.dependencies` of `pyproject.toml`.
+  - JavaScript: the exact `@idfkit/core`, `@idfkit/schemas` and `@idfkit/language` pins in
+    `idf-editor/package.json`. The three are released in lockstep and must stay equal.
+
+  Bumping either needs no register change. A JavaScript bump also requires rebuilding the editor
+  bundle (`make build-editor`), because `scripts/assets/idf-editor.js` is committed.
 - **Its standing**: behind the current idfkit, recorded as a `not-yet` lag tracked by the open bump
   pull request, because an adoption is in progress rather than declined. If this repository decides
   to follow idfkit only on some other schedule, dispatch the bump with `decline_reason` stating that

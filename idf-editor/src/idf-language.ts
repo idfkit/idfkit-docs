@@ -1,226 +1,130 @@
 /**
- * IDF Language Definition for Monaco Editor
+ * IDF language registration for Monaco.
  *
- * Provides syntax highlighting, tokenization, and language configuration
- * for EnergyPlus IDF (Input Data File) format.
- *
- * Adapted from the Envelop project (src/editor/idf-language.ts).
+ * The editor owns no grammar. Token boundaries come from `scanIdf` and
+ * `classify` in `@idfkit/core`, the same syntax layer the parser, Envelop and
+ * idfkit-lsp use, and are handed to Monaco through a document semantic tokens
+ * provider. What remains here is the mapping from token kind to theme scope.
  */
 
-import type { languages } from 'monaco-editor';
+import { classify, scanIdf, type Token, type TokenKind } from '@idfkit/core';
+import type * as Monaco from 'monaco-editor';
 
 /** Language ID for IDF files */
 export const IDF_LANGUAGE_ID = 'idf';
 
-/** IDF Language configuration */
-export const idfLanguageConfiguration: languages.LanguageConfiguration = {
+/** IDF language configuration (comment toggling and word boundaries). */
+export const idfLanguageConfiguration: Monaco.languages.LanguageConfiguration = {
   comments: {
     lineComment: '!',
   },
   brackets: [],
   autoClosingPairs: [],
   surroundingPairs: [],
-  folding: {
-    markers: {
-      start: /^!-\s*={3,}\s*ALL OBJECTS IN CLASS:/i,
-      end: /^!-\s*={3,}\s*ALL OBJECTS IN CLASS:/i,
-    },
-  },
   wordPattern: /[A-Za-z][A-Za-z0-9:_-]*/,
 };
 
-/** Common EnergyPlus object class names for highlighting */
-const COMMON_CLASSES = [
-  'Version',
-  'SimulationControl',
-  'Building',
-  'Timestep',
-  'RunPeriod',
-  'Site:Location',
-  'SizingPeriod:DesignDay',
-  'GlobalGeometryRules',
-  'Zone',
-  'ZoneList',
-  'BuildingSurface:Detailed',
-  'FenestrationSurface:Detailed',
-  'Wall:Exterior',
-  'Wall:Interior',
-  'Roof',
-  'Floor:GroundContact',
-  'Window',
-  'Door',
-  'Material',
-  'Material:NoMass',
-  'Material:AirGap',
-  'WindowMaterial:SimpleGlazingSystem',
-  'WindowMaterial:Glazing',
-  'Construction',
-  'Schedule:Compact',
-  'Schedule:Constant',
-  'Schedule:Day:Interval',
-  'Schedule:Week:Daily',
-  'Schedule:Year',
-  'ScheduleTypeLimits',
-  'People',
-  'Lights',
-  'ElectricEquipment',
-  'ZoneInfiltration:DesignFlowRate',
-  'ZoneVentilation:DesignFlowRate',
-  'Sizing:Zone',
-  'Sizing:System',
-  'Sizing:Plant',
-  'ZoneHVAC:IdealLoadsAirSystem',
-  'ZoneHVAC:EquipmentList',
-  'ZoneHVAC:EquipmentConnections',
-  'ThermostatSetpoint:SingleHeating',
-  'ThermostatSetpoint:SingleCooling',
-  'ThermostatSetpoint:DualSetpoint',
-  'ZoneControl:Thermostat',
-  'AirLoopHVAC',
-  'AirLoopHVAC:ZoneSplitter',
-  'AirLoopHVAC:ZoneMixer',
-  'Fan:ConstantVolume',
-  'Fan:VariableVolume',
-  'Fan:OnOff',
-  'Coil:Heating:Electric',
-  'Coil:Heating:Fuel',
-  'Coil:Heating:Water',
-  'Coil:Cooling:DX:SingleSpeed',
-  'Coil:Cooling:DX:TwoSpeed',
-  'Coil:Cooling:Water',
-  'Controller:OutdoorAir',
-  'AirLoopHVAC:OutdoorAirSystem',
-  'OutdoorAir:Mixer',
-  'SetpointManager:Scheduled',
-  'SetpointManager:SingleZone:Reheat',
-  'PlantLoop',
-  'Pump:ConstantSpeed',
-  'Pump:VariableSpeed',
-  'Boiler:HotWater',
-  'Chiller:Electric:EIR',
-  'CoolingTower:SingleSpeed',
-  'Output:Variable',
-  'Output:Meter',
-  'Output:Table:Monthly',
-  'Output:Table:SummaryReports',
-  'OutputControl:Table:Style',
-];
-
-/** Keywords used in IDF field values */
-const KEYWORDS = [
-  'Yes',
-  'No',
-  'On',
-  'Off',
-  'True',
-  'False',
-  'autocalculate',
-  'autosize',
-  'Continuous',
-  'Discrete',
-  'Any Number',
-  'Hourly',
-  'Timestep',
-  'Daily',
-  'Monthly',
-  'RunPeriod',
-  'Annual',
-  'SummerDesignDay',
-  'WinterDesignDay',
-  'Sunday',
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-  'Holiday',
-  'CustomDay1',
-  'CustomDay2',
-  'AllDays',
-  'Weekdays',
-  'Weekends',
-  'AllOtherDays',
-];
-
-/** IDF Monarch tokenizer definition */
-export const idfTokensProvider: languages.IMonarchLanguage = {
-  defaultToken: 'invalid',
-  tokenPostfix: '.idf',
-
-  // Case insensitive
-  ignoreCase: true,
-
-  // Common class names
-  classes: COMMON_CLASSES,
-
-  // Keywords
-  keywords: KEYWORDS,
-
-  // Operators and delimiters
-  operators: [',', ';'],
-
-  // Number patterns
-  digits: /\d+/,
-  floatDigits: /\d*\.\d+([eE][+-]?\d+)?/,
-
-  tokenizer: {
-    root: [
-      // Whitespace
-      { include: '@whitespace' },
-
-      // Comments (must come before other rules)
-      [/!-.*$/, 'comment.doc'],
-      [/!.*$/, 'comment'],
-
-      // Class names (at start of line or after semicolon)
-      [
-        /^([A-Za-z][A-Za-z0-9:_-]*)\s*(,)/,
-        [
-          {
-            cases: {
-              '@classes': 'type.identifier',
-              '@default': 'type',
-            },
-          },
-          'delimiter',
-        ],
-      ],
-
-      // Field values
-      { include: '@fieldValue' },
-
-      // Delimiters
-      [/[,]/, 'delimiter'],
-      [/[;]/, 'delimiter.semicolon'],
-    ],
-
-    whitespace: [[/[ \t\r\n]+/, 'white']],
-
-    fieldValue: [
-      // Numbers (including scientific notation)
-      [/-?\d*\.\d+([eE][+-]?\d+)?/, 'number.float'],
-      [/-?\d+([eE][+-]?\d+)?/, 'number'],
-
-      // Keywords
-      [
-        /[A-Za-z][A-Za-z0-9_-]*/,
-        {
-          cases: {
-            '@keywords': 'keyword',
-            '@default': 'string',
-          },
-        },
-      ],
-
-      // Wildcards and special values
-      [/\*/, 'constant'],
-
-      // Time/date patterns (e.g., "Through: 12/31")
-      [/Through:\s*\d+\/\d+/, 'string.date'],
-      [/For:\s*[A-Za-z,\s]+/, 'string.date'],
-      [/Until:\s*\d+:\d+/, 'string.date'],
-      [/Interpolate:\s*[A-Za-z]+/, 'string.date'],
-    ],
-  },
+/**
+ * Theme scope for each token kind, or `null` for a kind that is not drawn.
+ *
+ * Written as a record so that it is total over `TokenKind`: a kind added
+ * upstream without an entry here is a type error rather than an uncoloured span.
+ * Two kinds are split once more in `scopeFor`, `value` into `number` and
+ * `string` and `comment` into field labels and other comments; both are
+ * presentation choices over spans the package already delimited.
+ */
+const TOKEN_SCOPE: Readonly<Record<TokenKind, string | null>> = {
+  comment: 'comment',
+  typeName: 'type',
+  value: 'string',
+  separator: 'delimiter',
+  terminator: 'delimiter.semicolon',
+  trivia: null,
 };
+
+/** Scope for values that read as numbers. */
+const NUMBER_SCOPE = 'number';
+
+/** Scope for `!-` comments, the convention by which IDF files label each field. */
+const FIELD_LABEL_SCOPE = 'comment.doc';
+
+/** Token types registered with Monaco, in legend order. */
+const TOKEN_TYPES: readonly string[] = [
+  ...new Set([
+    ...Object.values(TOKEN_SCOPE).filter((scope): scope is string => scope !== null),
+    NUMBER_SCOPE,
+    FIELD_LABEL_SCOPE,
+  ]),
+];
+
+const SCOPE_INDEX: ReadonlyMap<string, number> = new Map(TOKEN_TYPES.map((scope, index) => [scope, index]));
+
+const NUMERIC_VALUE = /^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/;
+
+/** Scope for one classified token of `text`, or `null` when it is not drawn. */
+function scopeFor(token: Token, text: string): string | null {
+  if (token.kind === 'value' && NUMERIC_VALUE.test(text.slice(token.start, token.end).trim())) return NUMBER_SCOPE;
+  if (token.kind === 'comment' && text.startsWith('!-', token.start)) return FIELD_LABEL_SCOPE;
+  return TOKEN_SCOPE[token.kind];
+}
+
+/**
+ * Encode a model's tokens in Monaco's five-integer delta form.
+ *
+ * `classify` splits tokens at line boundaries, but in @idfkit/core 0.4.0 the
+ * piece before a break keeps the line terminator: a value in an unterminated
+ * statement (an output-variable listing, say) ends with `\n`. Monaco expects
+ * every token to end within its line and logs an error for each one that does
+ * not, so each length is clamped to the remainder of its line.
+ */
+function encodeTokens(model: Monaco.editor.ITextModel): Uint32Array {
+  const text = model.getValue();
+  const data: number[] = [];
+  let lastLine = 0;
+  let lastColumn = 0;
+
+  for (const token of classify(scanIdf(text))) {
+    const scope = scopeFor(token, text);
+    if (scope === null) continue;
+
+    const position = model.getPositionAt(token.start);
+    const line = position.lineNumber - 1;
+    const column = position.column - 1;
+    const length = Math.min(token.end - token.start, model.getLineLength(position.lineNumber) - column);
+    if (length <= 0) continue;
+
+    data.push(
+      line - lastLine,
+      line === lastLine ? column - lastColumn : column,
+      length,
+      SCOPE_INDEX.get(scope) ?? 0,
+      0
+    );
+    lastLine = line;
+    lastColumn = column;
+  }
+
+  return new Uint32Array(data);
+}
+
+/**
+ * Register the IDF language, its configuration and its semantic tokens provider.
+ *
+ * Code blocks in the documentation are short and read-only, so tokens are
+ * computed synchronously on request rather than in a worker.
+ */
+export function registerIdfLanguage(monaco: typeof Monaco): void {
+  monaco.languages.register({
+    id: IDF_LANGUAGE_ID,
+    extensions: ['.idf', '.imf'],
+    aliases: ['IDF', 'EnergyPlus IDF', 'Input Data File'],
+    mimetypes: ['text/x-idf'],
+  });
+  monaco.languages.setLanguageConfiguration(IDF_LANGUAGE_ID, idfLanguageConfiguration);
+
+  monaco.languages.registerDocumentSemanticTokensProvider(IDF_LANGUAGE_ID, {
+    getLegend: () => ({ tokenTypes: [...TOKEN_TYPES], tokenModifiers: [] }),
+    provideDocumentSemanticTokens: (model) => ({ data: encodeTokens(model) }),
+    releaseDocumentSemanticTokens: () => undefined,
+  });
+}
