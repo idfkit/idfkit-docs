@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The site and the README move to the idfkit visual identity at `identity-2026.5`. The vendored files under `identity/` differ from `identity-2026.4` only in the tag they name; `pyproject.toml` and `.github/workflows/check-identity.yml` declare the new tag.
+
 ## [0.2.0] - 2026-11-04
 
 ### Added
