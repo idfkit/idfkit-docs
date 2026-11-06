@@ -57,7 +57,8 @@ Now you can make your changes locally.
 1. Preview the documentation locally:
 
 ```bash
-make docs
+make convert VERSION=v25.2.0
+make dev VERSION=v25.2.0
 ```
 
 1. When you're done making changes, check that the documentation builds correctly:

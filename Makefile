@@ -1,7 +1,7 @@
 .PHONY: install
 install: ## Install the virtual environment and install the pre-commit hooks
 	@if [ ! -d .git ]; then \
-		echo "❌ Error: Not a git repository. Run 'git init -b main' first (see README step 1)."; \
+		echo "❌ Error: Not a git repository. Clone the repository with git (see Setup in README.md), or run 'git init -b main' first."; \
 		exit 1; \
 	fi
 	@echo "🚀 Creating virtual environment using uv"
