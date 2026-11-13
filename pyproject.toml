@@ -1,6 +1,6 @@
 [project]
 name = "idfkit-docs"
-version = "0.2.0"
+version = "0.2.1"
 description = "EnergyPlus documentation built with Zensical"
 authors = [{ name = "Samuel Letellier-Duchesne", email = "developers@idfkit.com" }]
 readme = "README.md"

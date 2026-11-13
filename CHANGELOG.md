@@ -7,9 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-13
+
 ### Changed
 
-- The site and the README move to the idfkit visual identity at `identity-2026.5`. The vendored files under `identity/` differ from `identity-2026.4` only in the tag they name; `pyproject.toml` and `.github/workflows/check-identity.yml` declare the new tag.
+- The site and the README move to the idfkit visual identity at `identity-2026.5`. The vendored files under `identity/` differ from `identity-2026.4` only in the tag they name; `pyproject.toml` and `.github/workflows/check-identity.yml` declare the new tag (#48).
+
+### Fixed
+
+- The deploy job publishes the identity files at the site root. Previously the landing page on docs.idfkit.com linked a stylesheet, the lockup and the favicon set that all returned 404 (#47).
+- The `rehearse-candidate.yml` workflow runs at `governance-2026.32`, which installs the idfkit candidate into this repository's own environment. At the previous tag the install step failed before any check ran (#50).
 
 ## [0.2.0] - 2026-11-04
 
@@ -73,7 +80,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Equation labels, Pandoc reference attributes and image caption artifacts in converted pages (#2).
 - Running the conversion on Python 3.10 (#6).
 
-[unreleased]: https://github.com/idfkit/idfkit-docs/compare/v0.2.0...HEAD
+[unreleased]: https://github.com/idfkit/idfkit-docs/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/idfkit/idfkit-docs/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/idfkit/idfkit-docs/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/idfkit/idfkit-docs/compare/v0.0.1...v0.1.0
 [0.0.1]: https://github.com/idfkit/idfkit-docs/releases/tag/v0.0.1
